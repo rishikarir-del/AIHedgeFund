@@ -14,6 +14,8 @@
     "@arf/auth": "workspace:*",
     "@arf/contracts": "workspace:*",
     "@arf/db": "workspace:*",
+    "@arf/metrics": "workspace:*",
+    "@arf/pine": "workspace:*",
     "@arf/workflow": "workspace:*",
     "drizzle-orm": "^0.38.0",
     "fastify": "^5.2.0",

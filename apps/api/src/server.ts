@@ -5,16 +5,23 @@
  * it through `inject` without binding a port (CLAUDE.md 7.1: dependency
  * injection at service boundaries).
  */
+import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { TokenVerifier } from '@arf/auth';
-import type { Database } from '@arf/db';
+import { deriveObjectKey, validateUpload, type Database, type ObjectStore } from '@arf/db';
 import { toProblemDetails } from './errors.js';
 import { auth } from './plugins/auth.js';
 import { registerCampaignRoutes } from './routes/campaigns.js';
+import { registerStrategyRoutes } from './routes/strategies.js';
+import { registerVerificationRoutes } from './routes/verification.js';
+import { registerEvidenceRoutes } from './routes/evidence.js';
+import { registerDecisionRoutes } from './routes/decisions.js';
 
 export interface BuildAppOptions {
   readonly db: Database;
   readonly verifier: TokenVerifier;
+  /** Optional so tests that never touch storage need not stand up MinIO. */
+  readonly objectStore?: ObjectStore | undefined;
   readonly logger?: boolean;
 }
 
@@ -23,7 +30,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     logger: options.logger ?? false,
     // Every request carries a trace id, which appears in problem responses and
     // in audit records (CLAUDE.md 20).
-    genReqId: () => crypto.randomUUID(),
+    genReqId: () => randomUUID(),
   });
 
   await app.register(auth, { verifier: options.verifier, db: options.db });
@@ -39,18 +46,37 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     return reply.code(problem.status).type('application/problem+json').send(problem);
   });
 
-  app.setNotFoundHandler((request, reply) => {
-    const problem = toProblemDetails(
-      Object.assign(new Error('Route not found'), { name: 'NotFound' }),
-      request.url,
-      request.id,
-    );
-    return reply.code(404).type('application/problem+json').send({ ...problem, status: 404, code: 'not_found' });
-  });
+  app.setNotFoundHandler((request, reply) =>
+    reply
+      .code(404)
+      .type('application/problem+json')
+      .send({
+        type: 'https://arf-os.local/problems/not_found',
+        title: 'Not Found',
+        status: 404,
+        detail: 'No route matches this path.',
+        instance: request.url,
+        code: 'not_found',
+        traceId: request.id,
+      }),
+  );
 
   app.get('/health', async () => ({ status: 'ok' }));
 
   registerCampaignRoutes(app, options.db);
+  registerStrategyRoutes(app, options.db);
+  registerEvidenceRoutes(app, options.db);
+  registerDecisionRoutes(app, options.db);
+
+  if (options.objectStore) {
+    registerVerificationRoutes(
+      app,
+      options.db,
+      options.objectStore,
+      validateUpload,
+      deriveObjectKey,
+    );
+  }
 
   return app;
 }
