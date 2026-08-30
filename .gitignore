@@ -21,3 +21,7 @@ tradingview-exports/
 *.log
 playwright-report/
 test-results/
+
+# Next.js
+.next/
+next-env.d.ts

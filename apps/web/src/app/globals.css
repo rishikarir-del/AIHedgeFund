@@ -1,0 +1,182 @@
+/* Desktop-first per CLAUDE.md 18. Deliberately plain: the specification warns
+   against a visually impressive dashboard ahead of a grounded evidence system. */
+
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --border: #272b35;
+  --text: #e6e8ee;
+  --muted: #8b93a7;
+  --accent: #6b8afd;
+  --warn: #d9a441;
+  --fail: #d95f5f;
+  --pass: #4fa870;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.env-badge {
+  font-size: 11px;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--muted);
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: calc(100vh - 90px);
+}
+
+nav {
+  border-right: 1px solid var(--border);
+  padding: 16px 0;
+}
+
+nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+nav a {
+  display: block;
+  padding: 8px 18px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+nav a:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+
+main {
+  padding: 24px 28px;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin: 0 0 20px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 8px;
+  color: var(--muted);
+}
+
+.badge[data-scope='FINAL_HOLDOUT'] {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.badge[data-scope='FORWARD'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.provenance {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.unknown {
+  color: var(--muted);
+}
+
+.compared-value[data-disagrees='true'] {
+  border-left: 2px solid var(--warn);
+  padding-left: 10px;
+}
+
+.divergence-note {
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.verdict[data-verdict='PASS'] { color: var(--pass); }
+.verdict[data-verdict='WARN'] { color: var(--warn); }
+.verdict[data-verdict='FAIL'] { color: var(--fail); }
+.verdict[data-verdict='INSUFFICIENT_DATA'] { color: var(--muted); }
+
+.state-machine, .empty, .error-panel {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 18px;
+  color: var(--muted);
+}
+
+.error-panel {
+  border-color: var(--fail);
+  color: var(--fail);
+}
+
+.trace {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.disclaimer {
+  border-top: 1px solid var(--border);
+  padding: 10px 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
