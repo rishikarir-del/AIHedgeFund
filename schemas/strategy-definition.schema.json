@@ -1,0 +1,426 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arf-os.local/schemas/strategy-definition.schema.json",
+  "title": "strategy-definition",
+  "description": "Strategy Definition Language document (spec section 9)",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "strategy": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "family": {
+          "type": "string",
+          "enum": [
+            "trend_following",
+            "mean_reversion",
+            "breakout",
+            "market_structure",
+            "momentum",
+            "volatility",
+            "carry",
+            "seasonality"
+          ]
+        },
+        "thesis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "directions": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "long",
+              "short"
+            ]
+          }
+        }
+      },
+      "required": [
+        "name",
+        "family",
+        "thesis",
+        "directions"
+      ]
+    },
+    "market": {
+      "type": "object",
+      "properties": {
+        "assetClass": {
+          "type": "string",
+          "enum": [
+            "crypto",
+            "forex",
+            "futures",
+            "indices",
+            "metals",
+            "equities"
+          ]
+        },
+        "symbols": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "timeframe": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1
+        },
+        "chartType": {
+          "type": "string",
+          "const": "standard_ohlc"
+        }
+      },
+      "required": [
+        "assetClass",
+        "symbols",
+        "timeframe",
+        "timezone",
+        "session",
+        "chartType"
+      ]
+    },
+    "signals": {
+      "type": "object",
+      "properties": {
+        "longEntry": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\s+(AND|OR)\\s+(NOT\\s+)?[A-Za-z_][A-Za-z0-9_]*)*$"
+        },
+        "shortEntry": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\s+(AND|OR)\\s+(NOT\\s+)?[A-Za-z_][A-Za-z0-9_]*)*$"
+        },
+        "longExit": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\s+(AND|OR)\\s+(NOT\\s+)?[A-Za-z_][A-Za-z0-9_]*)*$"
+        },
+        "shortExit": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\s+(AND|OR)\\s+(NOT\\s+)?[A-Za-z_][A-Za-z0-9_]*)*$"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "entryOrder": {
+          "type": "string",
+          "enum": [
+            "market_next_bar",
+            "stop",
+            "limit"
+          ]
+        },
+        "pyramiding": {
+          "type": "number",
+          "const": 0
+        },
+        "allowReversal": {
+          "type": "boolean"
+        },
+        "processOnClose": {
+          "type": "boolean"
+        },
+        "calcOnEveryTick": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": [
+        "entryOrder",
+        "pyramiding",
+        "allowReversal",
+        "processOnClose",
+        "calcOnEveryTick"
+      ]
+    },
+    "risk": {
+      "type": "object",
+      "properties": {
+        "sizingModel": {
+          "type": "string",
+          "enum": [
+            "percent_of_equity",
+            "fixed_cash",
+            "fixed_contracts"
+          ]
+        },
+        "sizePercent": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "leverage": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "stopLoss": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "atr_multiple"
+                },
+                "valueParameter": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "valueParameter"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "percent"
+                },
+                "valueParameter": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "valueParameter"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "ticks"
+                },
+                "valueParameter": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "valueParameter"
+              ]
+            }
+          ]
+        },
+        "takeProfit": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "risk_multiple"
+                },
+                "valueParameter": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "valueParameter"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "atr_multiple"
+                },
+                "valueParameter": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "valueParameter"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "percent"
+                },
+                "valueParameter": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "valueParameter"
+              ]
+            }
+          ]
+        },
+        "oneStopOneTarget": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "sizingModel",
+        "sizePercent",
+        "leverage",
+        "stopLoss",
+        "takeProfit",
+        "oneStopOneTarget"
+      ]
+    },
+    "costs": {
+      "type": "object",
+      "properties": {
+        "commissionType": {
+          "type": "string",
+          "enum": [
+            "percent",
+            "cash_per_order",
+            "cash_per_contract"
+          ]
+        },
+        "commissionValue": {
+          "type": "number",
+          "minimum": 0
+        },
+        "slippageTicks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commissionType",
+        "commissionValue",
+        "slippageTicks"
+      ]
+    },
+    "parameters": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "int",
+              "float",
+              "bool"
+            ]
+          },
+          "default": {
+            "type": [
+              "number",
+              "boolean"
+            ]
+          },
+          "min": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          },
+          "step": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "key",
+          "type",
+          "default"
+        ]
+      }
+    },
+    "segments": {
+      "type": "object",
+      "properties": {
+        "warmupBars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "selectionMode": {
+          "type": "string",
+          "enum": [
+            "fixed_split",
+            "rolling_walk_forward",
+            "anchored_walk_forward"
+          ]
+        },
+        "embargoBars": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "warmupBars",
+        "selectionMode",
+        "embargoBars"
+      ]
+    },
+    "falsification": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "strategy",
+    "market",
+    "signals",
+    "execution",
+    "risk",
+    "costs",
+    "parameters",
+    "segments",
+    "falsification"
+  ]
+}
