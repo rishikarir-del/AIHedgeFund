@@ -86,6 +86,7 @@ Prompts guide agent behaviour. They do not control permissions, lifecycle transi
 ```mermaid
 flowchart TD
     HUMAN[Human Research Director] --> LEADER[Chief Research Orchestrator]
+    LEADER -->|Digest, decisions required, breaker alerts| HUMAN
 
     LEADER --> IDEA[Idea Scout]
     LEADER --> IND[Indicator Researcher]
@@ -419,9 +420,12 @@ The orchestration state machine belongs to ARF-OS. Core research governance shou
 | [`SPECIALIST_AGENT_PROMPTS.md`](./SPECIALIST_AGENT_PROMPTS.md) | Individual prompts for all specialist and support lanes |
 | [`CLAUDE_CODE_BUILD_PROMPT.md`](./CLAUDE_CODE_BUILD_PROMPT.md) | Build prompt for implementing the first production-quality vertical slice |
 | [`CLAUDE.md`](./CLAUDE.md) | Repository-level engineering policy and non-negotiable implementation rules |
-| [`schemas/strategy-definition.schema.json`](./schemas/strategy-definition.schema.json) | Initial Strategy Definition Language schema |
-| [`schemas/agent-handoff.schema.json`](./schemas/agent-handoff.schema.json) | Typed contract for agent-to-agent handoffs |
-| [`schemas/signal-event.schema.json`](./schemas/signal-event.schema.json) | TradingView forward-test signal-event schema |
+| [`schemas/strategy-definition.schema.json`](./schemas/strategy-definition.schema.json) | Strategy Definition Language schema, generated from `@arf/contracts` |
+| [`schemas/agent-handoff.schema.json`](./schemas/agent-handoff.schema.json) | Typed contract for agent-to-agent handoffs, generated from `@arf/contracts` |
+| [`schemas/backtest-plan.schema.json`](./schemas/backtest-plan.schema.json) | Declared plan for a backtest run, fixed before execution |
+| [`schemas/backtest-run-result.schema.json`](./schemas/backtest-run-result.schema.json) | Backtest result, source-discriminated (see ADR 0002) |
+| [`schemas/parity-report.schema.json`](./schemas/parity-report.schema.json) | Reported-versus-calculated comparison |
+| `schemas/signal-event.schema.json` _(milestone 15)_ | TradingView forward-test signal-event schema |
 
 ### Recommended reading order
 
@@ -430,7 +434,7 @@ The orchestration state machine belongs to ARF-OS. Core research governance shou
 3. `AI_RESEARCH_HEDGE_FUND_SPEC.md`
 4. `LEADER_AGENT_SYSTEM_PROMPT.md`
 5. `SPECIALIST_AGENT_PROMPTS.md`
-6. `schemas/*`
+6. `schemas/*` — generated from `@arf/contracts`; run `pnpm --filter @arf/contracts schemas:emit` to refresh
 7. `CLAUDE_CODE_BUILD_PROMPT.md`
 
 ---
@@ -524,11 +528,11 @@ Security issues should not be disclosed through public issues. Add a private rep
 
 ### Phase 1 — Evidence Registry
 
-Build the vertical slice for campaigns, immutable strategy versions, Pine revisions, TradingView report ingestion, independent metrics, equity curves, parity, and audited paper decisions.
+Build the vertical slice for operator onboarding and mandate, campaigns, immutable strategy versions, Pine revisions, TradingView report ingestion, independent metrics, equity curves, parity, and audited paper decisions.
 
 ### Phase 2 — Research Orchestration
 
-Add typed specialist-agent tasks, the leader-agent state machine, model-provider adapters, citations, budgets, retry policy, and evidence-bundle generation.
+Add typed specialist-agent tasks, the leader-agent state machine, model-provider adapters, citations, budgets, retry policy, evidence-bundle generation, and report and notification delivery.
 
 ### Phase 3 — Robustness Lab
 
@@ -536,7 +540,7 @@ Add walk-forward testing, parameter-neighbourhood analysis, regime segmentation,
 
 ### Phase 4 — Forward-Test Operations
 
-Add TradingView alert ingestion, paper execution, expected-versus-observed reconciliation, deployment health, drift monitoring, and forward evidence gates.
+Add TradingView alert ingestion, paper execution, expected-versus-observed reconciliation, deployment health, drift monitoring, risk breakers with automatic suspension, and forward evidence gates.
 
 ### Phase 5 — Practice and Evaluation
 
@@ -546,7 +550,7 @@ Add blind benchmark suites, agent scorecards, prompt versioning, regression eval
 
 Add exposure decomposition, strategy correlation, crowding, capacity, portfolio simulation, and marginal contribution analysis.
 
-Live-capital execution requires a separate legal, operational, security, and risk specification and is not implied by this roadmap.
+Live-capital execution requires a separate legal, operational, security, and risk specification and is not implied by this roadmap. The governed path, its ten preconditions, and the permanent agent prohibitions are specified in section 29 of the main specification.
 
 ---
 

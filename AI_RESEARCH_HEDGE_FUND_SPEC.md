@@ -301,7 +301,9 @@ A rejected version may produce a new child version only when the proposed change
 
 ```mermaid
 flowchart TD
-    LEADER[Chief Research Orchestrator]
+    HUMAN[Human Research Director] --> LEADER[Chief Research Orchestrator]
+    LEADER -->|Digest, decisions required, breaker alerts| HUMAN
+
     LEADER --> A[Lane 1: Idea Scout]
     LEADER --> B[Lane 2: Indicator Researcher]
     LEADER --> C[Lane 3: Strategy Architect]
@@ -310,9 +312,21 @@ flowchart TD
     LEADER --> F[Lane 6: Robustness Validator]
     LEADER --> G[Lane 7: Forward-Test Operator]
     LEADER --> H[Lane 8: Strategy Judge]
-    LEADER --> I[Support: Data Integrity & Regime Analyst]
-    LEADER --> J[Phase 2: Portfolio Researcher]
+
+    I[Support: Data Integrity & Regime Analyst] --> LEADER
+    I --> E
+    I --> F
+
+    J[Phase 2: Portfolio Researcher] --> LEADER
+
+    A --> B --> C --> D --> E --> F --> H
+    H -->|Paper approved| G
+    G --> H
 ```
+
+Reporting flows back to the Human Research Director under §27. Risk breakers (§28)
+are deterministic software gates, not agents, and so do not appear as nodes; live
+execution (§29) has no agent path at all.
 
 ### 6.2 Shared rules for all agents
 
@@ -2032,6 +2046,30 @@ The agent runtime should be provider-agnostic and should not require LangChain. 
 - `prompt_challenges`
 - `prompt_promotions`
 
+### Onboarding and mandate
+
+- `operator_mandates`
+- `mandate_versions`
+- `onboarding_sessions`
+- `mandate_signatures`
+
+### Reporting and notifications
+
+- `report_definitions`
+- `report_instances`
+- `notification_subscriptions`
+- `notification_deliveries`
+- `notification_receipts`
+- `dead_letter_notifications`
+
+### Risk breakers
+
+- `breaker_definitions`
+- `breaker_bindings`
+- `breaker_events`
+- `deployment_suspensions`
+- `resume_approvals`
+
 ## 14.5 Key entity rules
 
 ### Strategy
@@ -2254,6 +2292,34 @@ Job statuses:
 - `POST /v1/committee/decisions`
 - `POST /v1/decisions/:id/override`
 
+### Onboarding and mandate
+
+- `POST /v1/onboarding/sessions`
+- `PATCH /v1/onboarding/sessions/:id/stages/:stage`
+- `POST /v1/onboarding/sessions/:id/sign`
+- `GET /v1/mandates/active`
+- `GET /v1/mandates/:id/versions`
+- `POST /v1/mandates/:id/versions`
+
+### Reporting and notifications
+
+- `GET /v1/reports`
+- `GET /v1/reports/:id`
+- `POST /v1/reports/:type/run`
+- `GET /v1/notifications`
+- `POST /v1/notifications/:id/acknowledge`
+- `GET /v1/notification-subscriptions`
+- `PUT /v1/notification-subscriptions`
+- `POST /v1/notification-channels/:id/test`
+
+### Risk breakers
+
+- `GET /v1/forward-deployments/:id/breakers`
+- `GET /v1/forward-deployments/:id/breaker-events`
+- `POST /v1/forward-deployments/:id/resume`
+- `POST /v1/forward-deployments/:id/terminate`
+- `GET /v1/breaker-definitions`
+
 ## 14.11 API response conventions
 
 - JSON API envelope
@@ -2311,6 +2377,7 @@ Primary navigation:
 10. Practice Arena
 11. Data Health
 12. Policies and Admin
+13. Reports
 
 Global top bar:
 
@@ -3039,6 +3106,7 @@ Never use production holdout data in preview or practice environments.
 - Audit log
 - Strategy registry
 - Basic campaign/task state machine
+- Operator onboarding and mandate (§26)
 
 ### Phase 1 — Manual research factory
 
@@ -3049,6 +3117,7 @@ Never use production holdout data in preview or practice environments.
 - Manual TradingView report upload
 - Strategy Library
 - Basic equity and drawdown charts
+- Reporting and notification delivery (§27)
 
 ### Phase 2 — Automated research runner
 
@@ -3076,6 +3145,7 @@ Never use production holdout data in preview or practice environments.
 - Health monitoring
 - Forward Test Monitor
 - Drift reports
+- Risk breakers and automatic suspension (§28)
 
 ### Phase 5 — Agent practice
 
@@ -3094,7 +3164,7 @@ Never use production holdout data in preview or practice environments.
 
 ### Phase 7 — Optional controlled execution
 
-Only after separate legal, risk, security, exchange, and human-governance specifications.
+Specified in §29. Blocked until every precondition in §29.2 is satisfied and independently signed off. Only after separate legal, risk, security, exchange, and human-governance specifications.
 
 ---
 
@@ -3226,7 +3296,378 @@ These defaults are intentionally conservative and configurable.
 
 ---
 
-## 26. References and implementation notes
+## 26. Operator onboarding and mandate
+
+### 26.1 Purpose
+
+Onboarding produces the `OperatorMandate`: the authoritative record of who the operator is, which markets they are researching, what they will accept as evidence, and what they forbid. Every downstream default in this specification — campaign scope, evidence thresholds, forward-test limits, breaker levels, report routing — resolves against a mandate. No campaign may be created without an active one.
+
+Onboarding is not personalisation. It is the point at which a human sets boundaries that agents may not later widen.
+
+### 26.2 Onboarding stages
+
+1. `IDENTITY` — organisation, operator, role assignment, timezone, locale.
+2. `MARKETS` — asset classes, venues, symbol universe, timeframes, sessions.
+3. `RESEARCH_INTENT` — strategy families of interest, families explicitly excluded, research horizon.
+4. `EVIDENCE_POSTURE` — required evidence grade, minimum trade count, out-of-sample requirements, parameter-sensitivity tolerance.
+5. `RISK_POSTURE` — maximum acceptable historical drawdown, forward-test breaker levels, simulated capital scale.
+6. `OPERATIONAL` — data providers, TradingView account tier, alert channels, quiet hours.
+7. `GOVERNANCE` — who may approve promotion, who may resume a suspended deployment, dual-approval requirements.
+8. `BUDGET` — model spend ceiling per campaign and per day, and the action taken on exhaustion.
+9. `REVIEW` — the operator confirms the rendered mandate and the system records the signature.
+
+Stages are resumable. A mandate is not active until `REVIEW` is signed.
+
+### 26.3 OperatorMandate record
+
+```json
+{
+  "mandateId": "mnd_01H...",
+  "version": 3,
+  "status": "ACTIVE",
+  "organisationId": "org_01H...",
+  "signedBy": "user_01H...",
+  "signedAt": "2026-08-29T09:12:04Z",
+
+  "markets": {
+    "assetClasses": ["crypto"],
+    "venues": ["BYBIT"],
+    "symbolUniverse": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    "timeframes": ["15m", "1h", "4h"],
+    "sessions": "24x7"
+  },
+
+  "researchIntent": {
+    "families": ["trend_following", "market_structure", "mean_reversion"],
+    "excludedFamilies": ["martingale", "grid", "hft_latency"],
+    "horizon": "intraday_to_swing"
+  },
+
+  "evidencePosture": {
+    "minimumEvidenceGrade": "B",
+    "minimumTradeCount": 100,
+    "requireOutOfSample": true,
+    "requireWalkForward": true,
+    "maxParameterSensitivity": 0.35
+  },
+
+  "riskPosture": {
+    "maxHistoricalDrawdownPct": 30,
+    "forwardDrawdownWarnPct": 12,
+    "forwardDrawdownSuspendPct": 20,
+    "simulatedCapital": 10000,
+    "currency": "USD"
+  },
+
+  "operational": {
+    "dataProviders": ["bybit_public"],
+    "alertChannels": ["in_app", "email"],
+    "quietHours": { "start": "22:00", "end": "07:00", "timezone": "Europe/London" }
+  },
+
+  "governance": {
+    "promotionApprovers": ["user_01H..."],
+    "resumeApprovers": ["user_01H..."],
+    "dualApprovalRequired": true
+  },
+
+  "budget": {
+    "dailyModelSpendUsd": 25,
+    "perCampaignSpendUsd": 200,
+    "onExhaustion": "PAUSE_CAMPAIGN"
+  }
+}
+```
+
+### 26.4 Policy binding
+
+| Mandate field | Governs |
+|---|---|
+| `markets.symbolUniverse` | Idea Scout search scope, Backtest Engineer symbol validation |
+| `markets.timeframes` | Strategy Architect design space, Pine metadata header |
+| `researchIntent.excludedFamilies` | Idea Card rejection at intake, before any Pine is written |
+| `evidencePosture.*` | Gate thresholds in §12.6 and evidence grades in §16.3 |
+| `riskPosture.maxHistoricalDrawdownPct` | Hard-fail condition in §16.1 |
+| `riskPosture.forward*Pct` | Breaker thresholds in §28.2 |
+| `operational.alertChannels`, `quietHours` | Delivery routing in §27.3 and §27.4 |
+| `governance.*` | Committee queue routing and §28.5 resume authority |
+| `budget.*` | Orchestrator task admission and §18.3 budget alerts |
+
+A campaign records the `mandateId` and `version` it was created under. Evidence produced under an earlier mandate version remains attached to that version and is not retroactively re-graded.
+
+### 26.5 Mandate rules
+
+- A mandate is immutable and versioned on the same basis as `StrategyVersion` (§3.2).
+- Any change creates a new version; the previous version is retained.
+- Agents may read a mandate. Agents may never write one.
+- Narrowing a mandate takes effect immediately on new work.
+- Widening a mandate requires a new human signature and does not apply retroactively.
+- Active forward deployments continue under the mandate version they started with until completed or restarted.
+
+### 26.6 Prohibited behaviour
+
+- Inferring an unstated mandate field from conversation, prior campaigns, or defaults.
+- Widening the symbol universe, timeframe set, evidence thresholds, or risk limits.
+- Creating a campaign without an active signed mandate.
+- Treating operator silence as permission.
+- Treating free-text entered during onboarding as instructions to the agent. Onboarding free-text is research input and is never executed as direction.
+
+### 26.7 Interface additions
+
+Data model: `operator_mandates`, `mandate_versions`, `onboarding_sessions`, `mandate_signatures`.
+
+API:
+
+- `POST /v1/onboarding/sessions`
+- `PATCH /v1/onboarding/sessions/:id/stages/:stage`
+- `POST /v1/onboarding/sessions/:id/sign`
+- `GET /v1/mandates/active`
+- `GET /v1/mandates/:id/versions`
+- `POST /v1/mandates/:id/versions`
+
+Frontend: an Onboarding wizard covering the nine stages, and a Mandate page under Policies and Admin showing the active mandate, its version history, and a diff between versions.
+
+---
+
+## 27. Reporting and notification delivery
+
+### 27.1 Purpose
+
+§7.1 and the Leader prompt define the *content* of `DailyResearchDigest`. This section defines *delivery*: which reports exist, how they reach a human, and what guarantees apply. A report that is generated but not delivered is not a report.
+
+### 27.2 Report catalogue
+
+Scheduled:
+
+- `DailyResearchDigest` — content per §7.1.
+- `WeeklyEvidenceReview` — promotions, rejections, and gate-failure patterns over seven days.
+
+Event-driven:
+
+- `DecisionRequired` — a strategy is blocked pending human approval.
+- `BreakerFired` — emitted by §28.
+- `ForwardHealthAlert` — emitted by §7.8 health checks.
+- `DataIncident` — emitted by the Data Integrity lane (§7.10).
+- `BudgetThreshold` — 80% and 100% of a mandate budget.
+- `CampaignComplete` — campaign reaches a terminal state.
+
+### 27.3 Channels
+
+- **In-app inbox.** Always enabled. Canonical record. No report may exist only on an external channel.
+- **Email.** Digest and `CRITICAL` events.
+- **Webhook.** Signed with HMAC-SHA256 under the scheme in §13.6, with timestamp and replay window.
+- **Telegram.** Short-form event notifications only; never carries protected holdout metrics.
+
+Channel selection resolves from `operational.alertChannels` in the active mandate.
+
+### 27.4 Delivery semantics
+
+- Delivery is at-least-once. Recipients must tolerate duplicates.
+- The idempotency key is `(reportType, subjectId, periodKey)`, following the alert idempotency rule in §13.7.
+- Failed deliveries retry with exponential backoff to a bounded attempt count, then move to a dead-letter queue and raise an in-app `CRITICAL`.
+- A delivery receipt is recorded per channel per attempt: queued, sent, failed, or suppressed.
+- Quiet hours come from the mandate and suppress `INFO` and `NOTICE` only.
+- `CRITICAL` ignores quiet hours. A fired `SUSPEND` breaker is always `CRITICAL`.
+
+### 27.5 Severity
+
+| Severity | Example | Quiet hours | Default channels |
+|---|---|---|---|
+| `INFO` | Campaign progress | Suppressed | In-app |
+| `NOTICE` | Digest, strategy rejected | Suppressed | In-app, email |
+| `WARN` | Drift detected, breaker `WARN` | Delivered | In-app, email |
+| `CRITICAL` | Breaker `SUSPEND`, data incident, decision required | Delivered | All configured |
+
+### 27.6 Content rules
+
+- Reports are rendered from read models (§14.12). Agent free-text is never a report body.
+- Every quantitative claim links to the `evidence_item` or `metric_snapshot` that produced it.
+- Do not use celebratory language for unverified backtests.
+- A digest must state what was *not* verified, not only what passed.
+- Protected holdout metrics (§3.4) are included only where the recipient role permits; otherwise they are redacted with an explicit redaction marker rather than silently omitted.
+- Every report names the mandate version in force.
+
+### 27.7 Interface additions
+
+Data model: `report_definitions`, `report_instances`, `notification_subscriptions`, `notification_deliveries`, `notification_receipts`, `dead_letter_notifications`.
+
+API:
+
+- `GET /v1/reports`
+- `GET /v1/reports/:id`
+- `POST /v1/reports/:type/run`
+- `GET /v1/notifications`
+- `POST /v1/notifications/:id/acknowledge`
+- `GET /v1/notification-subscriptions`
+- `PUT /v1/notification-subscriptions`
+- `POST /v1/notification-channels/:id/test`
+
+Frontend: a Notifications inbox in the global top bar, and a Reports page listing scheduled and event report instances with delivery status per channel.
+
+---
+
+## 28. Risk breakers and automatic suspension
+
+### 28.1 Purpose
+
+The health checks in §7.8 verify *infrastructure* integrity — heartbeats, webhook acceptance, duplicate rates, fill lag. None of them detects a deployment that is technically healthy and financially failing. This section adds performance and risk breakers so that such a deployment is stopped without waiting for a human to notice.
+
+Breakers apply to paper forward tests in the MVP. §29 inherits them unchanged and adds to them.
+
+### 28.2 Breaker catalogue
+
+| Breaker | Fires when | Default action |
+|---|---|---|
+| `DRAWDOWN_ABSOLUTE` | Forward drawdown exceeds `riskPosture.forwardDrawdownSuspendPct` | `SUSPEND` |
+| `DRAWDOWN_RELATIVE` | Forward drawdown exceeds 1.5× the backtest maximum drawdown for the same version | `SUSPEND` |
+| `DAILY_LOSS` | Single-day loss exceeds one third of the suspend threshold | `THROTTLE` |
+| `CONSECUTIVE_LOSSES` | Losing streak exceeds the 99th percentile of the backtest streak distribution | `WARN` |
+| `TRADE_FREQUENCY_ANOMALY` | Observed trade rate deviates from backtest expectation beyond tolerance | `WARN` |
+| `SLIPPAGE_DEGRADATION` | Observed slippage exceeds the declared cost model over a rolling window | `THROTTLE` |
+| `WIN_RATE_COLLAPSE` | Rolling win rate falls below the backtest lower confidence bound | `WARN` |
+| `EQUITY_STALENESS` | No equity point within the expected interval | `THROTTLE` |
+| `DRIFT_SCORE` | `DriftReport` score exceeds threshold | `SUSPEND` |
+
+Each breaker declares a threshold, an evaluation window, a source metric, an action, and the mandate field it binds to. Thresholds not set by the mandate use the defaults above.
+
+### 28.3 Actions and state mapping
+
+- `WARN` — emit `BreakerFired` at `WARN`. Deployment state unchanged.
+- `THROTTLE` — deployment moves to `DEGRADED`. No new entries accepted. Existing paper positions are managed to their declared exits.
+- `SUSPEND` — deployment moves to `PAUSED`. Open paper positions are flattened at the next confirmed bar under the declared fill model. Further signals are recorded but not acted on.
+- `TERMINATE` — deployment moves to `FAILED`. The deployment is closed permanently.
+
+Actions escalate but never de-escalate automatically.
+
+### 28.4 Evaluation
+
+- Breakers are evaluated on every new forward equity point and on a fixed schedule for staleness checks.
+- Evaluation is deterministic and replayable: re-running a breaker over the stored equity and trade series must reproduce the identical firing sequence.
+- Evaluation is a software gate, not an agent judgement. Consistent with §3.3, models recommend and software governs.
+- Every firing writes a `BreakerEvent` recording the breaker, threshold, computed value, window, input series reference, resulting action, and prior and new deployment state.
+
+### 28.5 Resume rules
+
+- Only a human holding the `Operator` role and named in `governance.resumeApprovers` may resume from `PAUSED`.
+- Resume requires a written reason, which is stored on the deployment timeline.
+- Where the mandate sets `dualApprovalRequired`, resume needs two distinct human approvals.
+- `FAILED` cannot be resumed. A new deployment is required.
+- Changing a breaker threshold is a configuration change and therefore forces a new deployment under §25.
+
+### 28.6 Prohibited behaviour
+
+- Any agent raising, lowering, disabling, or muting a breaker.
+- Any agent resuming a suspended deployment.
+- Retroactively changing a threshold so that a fired breaker un-fires.
+- Dismissing a fired breaker as infrastructure noise without a corroborating Data Integrity finding.
+- Optimising thresholds against observed forward results, which would convert forward evidence into training data and violate §2.3.
+
+### 28.7 Interface additions
+
+Data model: `breaker_definitions`, `breaker_bindings`, `breaker_events`, `deployment_suspensions`, `resume_approvals`.
+
+API:
+
+- `GET /v1/forward-deployments/:id/breakers`
+- `GET /v1/forward-deployments/:id/breaker-events`
+- `POST /v1/forward-deployments/:id/resume`
+- `POST /v1/forward-deployments/:id/terminate`
+- `GET /v1/breaker-definitions`
+
+Frontend: a Risk panel on the Forward Test Monitor showing each breaker current value against its threshold as a proportion bar, the firing history on the event timeline, and a resume control gated by role that requires a reason before submission.
+
+---
+
+## 29. Governed live execution (Phase 7)
+
+### 29.1 Status
+
+Live execution is **not part of the MVP and not part of the initial product**. The non-goals in §2.3 remain binding in full. This section specifies the boundary and the conditions under which it could later be crossed, so that the path is governed rather than improvised. Building any component described here requires every precondition in §29.2 to be satisfied and independently signed off first.
+
+### 29.2 Preconditions
+
+All of the following must be evidenced and human-signed before implementation begins:
+
+1. Legal entity established and regulatory status determined for each operating jurisdiction.
+2. Required licences, registrations, or documented exemptions obtained.
+3. Exchange or broker agreements executed, including API terms review.
+4. Custody arrangement defined, with segregation of client and firm assets where applicable.
+5. Independent security review of the execution service, key handling, and kill path.
+6. Written risk policy specifying capital limits, leverage, and concentration.
+7. A named, accountable human operator with defined working-hours coverage.
+8. Incident response and stakeholder disclosure procedures.
+9. Insurance and capital adequacy where required by jurisdiction.
+10. Tax, accounting, and regulatory reporting arrangements.
+
+No agent may assess, attest to, or mark complete any of these preconditions.
+
+### 29.3 Authority
+
+- `LIVE_APPROVED` remains exactly as defined in §1.3: grantable only by a human-authorised external process. No model or agent can grant it.
+- Approval requires two distinct humans: one Committee Member and one Admin. The same person may not hold both.
+- Approval is scoped to a specific strategy version, a specific venue, and a specific capital limit.
+- Approval is time-boxed and expires. Expiry halts new entries and requires re-approval.
+
+### 29.4 Architecture separation
+
+- The execution service is isolated from the research plane, with its own deployment boundary, its own secrets store, and its own network policy.
+- Agents have no network path to the execution service.
+- Agents may read execution telemetry only through a read model, never through a control interface.
+- Exchange credentials never enter the research plane. §17.3 applies, with hardware-backed or HSM-equivalent storage.
+- The kill path (§29.7) must function when the research plane is entirely unavailable.
+
+### 29.5 Capital controls
+
+- Per-strategy notional cap.
+- Per-venue notional cap.
+- Aggregate account cap.
+- Maximum concurrent position count.
+- Leverage cap, defaulting to 1.
+
+Caps are enforced inside the execution service. They are never enforced in Pine, which is a research artefact and not a risk control.
+
+### 29.6 Breakers
+
+§28 applies unchanged, with these live-only additions:
+
+| Breaker | Fires when | Action |
+|---|---|---|
+| `REJECT_RATE` | Order rejection rate exceeds threshold over a rolling window | `SUSPEND` |
+| `LATENCY_BREACH` | Signal-to-acknowledgement latency exceeds the declared bound | `THROTTLE` |
+| `POSITION_RECONCILIATION_MISMATCH` | Venue position differs from internal position beyond tolerance | Kill switch |
+| `UNEXPECTED_POSITION` | A position exists with no corresponding approved signal | Kill switch |
+| `CAP_BREACH` | Any cap in §29.5 is exceeded | Kill switch |
+
+Reconciliation mismatch has no throttle-only state. It flattens and halts.
+
+### 29.7 Kill switch
+
+- A single human action halts every live strategy and flattens every position.
+- It is reachable without the research UI and without agent involvement.
+- It fires automatically on reconciliation mismatch, unexpected position, aggregate cap breach, and market-data loss beyond a declared threshold.
+- It is tested on a fixed schedule against a non-production venue. An untested kill switch is a failed precondition and blocks live operation.
+
+### 29.8 Audit
+
+Every order, modification, cancellation, fill, and rejection is recorded immutably with actor, timestamp, approval reference, strategy version hash, and mandate version. Records are append-only and independently exportable for regulatory inspection.
+
+### 29.9 Permanent agent prohibitions
+
+Regardless of phase, approval state, or configuration, an agent may never:
+
+- Hold, read, or transmit exchange credentials.
+- Place, modify, or cancel a live order.
+- Move, deposit, withdraw, or transfer capital.
+- Grant, alter, or bypass `LIVE_APPROVED`.
+- Change any capital cap or breaker threshold.
+- Disable, arm, or test-fire the kill switch.
+- Represent research approval or forward-test success as live approval.
+
+These prohibitions are not configurable and are not subject to policy override.
+
+---
+
+## 30. References and implementation notes
 
 The design relies on the current TradingView model in which Pine strategies simulate trades on historical and realtime bars, Strategy Report data can be exported as CSV, Deep Backtesting can use a selected historical range, and alerts run from a saved snapshot of a script and its inputs. Relevant official references:
 
@@ -3249,7 +3690,7 @@ The design relies on the current TradingView model in which Pine strategies simu
 
 ---
 
-## 27. Final operating rule
+## 31. Final operating rule
 
 The system’s job is not to manufacture profitable-looking backtests.
 
