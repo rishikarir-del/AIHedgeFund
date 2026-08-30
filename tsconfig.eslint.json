@@ -1,0 +1,23 @@
+{
+  // Lint-only project. The per-package tsconfigs include only `src` because
+  // they are composite and emit to `dist`; pulling tests in there would emit
+  // them too. That left test files outside every project, so neither tsc nor a
+  // type-aware lint rule ever looked at them.
+  //
+  // This project includes everything and emits nothing, so lint sees the whole
+  // repository.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "types": ["node"]
+  },
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "e2e/**/*.ts", "*.ts"],
+  "exclude": ["**/dist/**", "**/node_modules/**", "**/.next/**"]
+}

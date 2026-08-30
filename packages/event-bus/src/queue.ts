@@ -55,7 +55,7 @@ export class InlineQueue implements JobQueue {
   #pending: Promise<void> = Promise.resolve();
 
   register<TPayload>(queueName: string, handler: JobHandler<TPayload>): void {
-    this.#handlers.set(queueName, handler as JobHandler<never>);
+    this.#handlers.set(queueName, handler);
   }
 
   async enqueue<TPayload>(

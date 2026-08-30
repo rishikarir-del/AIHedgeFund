@@ -11,7 +11,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type Database } from '../src/client.js';
 import { uuidv7 } from '../src/ids.js';
-import { campaigns, memberships, organisations, users } from '../src/schema/identity.js';
+import { memberships, organisations, users } from '../src/schema/identity.js';
 import { auditEvents, outboxEvents } from '../src/schema/governance.js';
 import { campaigns as campaignsTable } from '../src/schema/research.js';
 

@@ -13,7 +13,7 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { transition, type WorkflowState, type EvidenceKind } from '@arf/workflow';
+import { transition, type EvidenceKind } from '@arf/workflow';
 import {
   auditEvents,
   backtestRuns,
@@ -104,7 +104,7 @@ async function gatherPromotionFacts(db: Database, versionId: string) {
 
     if (parity) {
       const rank = { PASS: 0, WARN: 1, INSUFFICIENT_DATA: 2, FAIL: 3 } as const;
-      const verdict = parity.verdict as keyof typeof rank;
+      const verdict = parity.verdict;
       if (worstParity === null || rank[verdict] > rank[worstParity]) worstParity = verdict;
     }
 
@@ -172,7 +172,7 @@ export function registerDecisionRoutes(app: FastifyInstance, db: Database): void
       actor,
       aggregateId: version.id,
       resourceOrganisationId: version.organisationId,
-      from: version.state as WorkflowState,
+      from: version.state,
       to: body.to,
       presentEvidence,
       createdByUserId: version.id === actor.userId ? actor.userId : 'unknown',

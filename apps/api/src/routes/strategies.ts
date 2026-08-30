@@ -74,7 +74,7 @@ export function registerStrategyRoutes(app: FastifyInstance, db: Database): void
   app.post('/v1/strategies', async (request, reply) => {
     const actor = guard(request, 'strategy:create');
     const body = parseBody(CreateStrategyBody, request.body);
-    const key = idempotencyKeyOf(request.headers as Record<string, unknown>);
+    const key = idempotencyKeyOf(request.headers);
 
     const claim = await claimIdempotencyKey(db, actor, key, body);
     if (claim.replayOf) {
@@ -136,7 +136,7 @@ export function registerStrategyRoutes(app: FastifyInstance, db: Database): void
       .where(eq(strategyVersions.strategyId, request.params.id));
     const nextNumber = existing.reduce((max, r) => Math.max(max, r.versionNumber), 0) + 1;
 
-    const definitionHash = hashManifest(body.definition as unknown as Record<string, unknown>);
+    const definitionHash = hashManifest(body.definition);
 
     // Version, definition and lineage are written together: 9.3 requires
     // strategy-version creation plus lineage to share a transaction.

@@ -15,11 +15,6 @@
       "cache": false,
       "persistent": true
     },
-    "lint": {
-      "dependsOn": [
-        "^build"
-      ]
-    },
     "typecheck": {
       "dependsOn": [
         "^build"

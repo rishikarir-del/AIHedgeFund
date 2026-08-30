@@ -9,7 +9,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import type { Actor, RbacRole, TokenVerifier } from '@arf/auth';
+import type { Actor, TokenVerifier } from '@arf/auth';
 import { memberships, users, type Database } from '@arf/db';
 import { Errors } from '../errors.js';
 
@@ -47,7 +47,7 @@ async function authPlugin(app: FastifyInstance, options: AuthPluginOptions): Pro
     request.actor = {
       userId: row.userId,
       organisationId: row.organisationId,
-      role: row.role as RbacRole,
+      role: row.role,
       traceId: request.id,
     };
   });

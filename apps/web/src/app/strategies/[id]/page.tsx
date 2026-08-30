@@ -111,7 +111,7 @@ export default async function StrategyDetailPage({
   ]);
 
   const snapshot = metrics.items[0];
-  const values = (snapshot?.metrics ?? {}) as Record<string, unknown>;
+  const values = (snapshot?.metrics ?? {});
 
   return (
     <>

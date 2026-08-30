@@ -78,7 +78,7 @@ export async function computeEvidence(
         runId: payload.runId,
         scope: 'IN_SAMPLE',
         calculationVersion: CALCULATION_VERSION,
-        metrics: metrics as unknown as Record<string, unknown>,
+        metrics: metrics,
       })
       .onConflictDoNothing();
 
@@ -101,8 +101,8 @@ export async function computeEvidence(
     const reportedSide: ParitySide = {
       ...identity,
       tradeCount:
-        typeof reported['totalTrades'] === 'number' ? (reported['totalTrades'] as number) : null,
-      netProfit: typeof reported['netProfit'] === 'string' ? (reported['netProfit'] as string) : null,
+        typeof reported['totalTrades'] === 'number' ? (reported['totalTrades']) : null,
+      netProfit: typeof reported['netProfit'] === 'string' ? (reported['netProfit']) : null,
     };
 
     const calculatedSide: ParitySide = {

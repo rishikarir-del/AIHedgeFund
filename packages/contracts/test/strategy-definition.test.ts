@@ -99,7 +99,7 @@ describe('StrategyDefinitionSchema', () => {
 });
 
 describe('assertParametersDeclared', () => {
-  const definition = StrategyDefinitionSchema.parse(SPEC_EXAMPLE) as StrategyDefinition;
+  const definition = StrategyDefinitionSchema.parse(SPEC_EXAMPLE);
 
   it('finds no problems in the spec example', () => {
     expect(assertParametersDeclared(definition)).toEqual({ undeclared: [], unused: [] });
