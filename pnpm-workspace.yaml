@@ -1,0 +1,12 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+allowBuilds:
+  # esbuild ships a platform binary and needs its postinstall to run. It is a
+  # transitive dependency of vitest.
+  esbuild: true
+  # Optional native accelerator for msgpackr, pulled in transitively by BullMQ.
+  # msgpackr falls back to a pure-JS path without it, so we decline the native
+  # build rather than widen the set of packages allowed to run scripts.
+  msgpackr-extract: false

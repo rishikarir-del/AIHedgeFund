@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.next/
+out/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# NEVER COMMIT: secrets, local databases, report exports, raw model output
+.env
+.env.*
+!.env.example
+*.local.json
+/data/
+/uploads/
+raw-model-output/
+tradingview-exports/
+
+.DS_Store
+*.log
+playwright-report/
+test-results/
