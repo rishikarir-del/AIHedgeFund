@@ -10,3 +10,6 @@ allowBuilds:
   # msgpackr falls back to a pure-JS path without it, so we decline the native
   # build rather than widen the set of packages allowed to run scripts.
   msgpackr-extract: false
+  # Clerk's postinstall is a telemetry and version-notice script. The SDK works
+  # without it and section 19 keeps third-party scripts to a minimum.
+  '@clerk/shared': false
