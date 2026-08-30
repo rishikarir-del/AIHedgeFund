@@ -101,6 +101,73 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.1)
 
+  apps/worker-analytics:
+    dependencies:
+      '@arf/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@arf/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  apps/worker-backtest:
+    dependencies:
+      '@arf/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@arf/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
+      '@arf/metrics':
+        specifier: workspace:*
+        version: link:../../packages/metrics
+      '@arf/pine':
+        specifier: workspace:*
+        version: link:../../packages/pine
+      drizzle-orm:
+        specifier: ^0.38.0
+        version: 0.38.4(@types/react@19.2.18)(postgres@3.4.9)(react@19.2.8)
+    devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1121.0
+        version: 3.1121.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)
+
+  apps/worker-forward:
+    dependencies:
+      '@arf/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@arf/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  apps/worker-research:
+    dependencies:
+      '@arf/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@arf/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/auth:
     dependencies:
       '@arf/contracts':

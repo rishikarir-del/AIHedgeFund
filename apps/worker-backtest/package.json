@@ -1,0 +1,26 @@
+{
+  "name": "@arf/worker-backtest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@arf/db": "workspace:*",
+    "@arf/event-bus": "workspace:*",
+    "@arf/metrics": "workspace:*",
+    "@arf/pine": "workspace:*",
+    "drizzle-orm": "^0.38.0"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1121.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
