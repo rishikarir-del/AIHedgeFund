@@ -180,3 +180,39 @@ th {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* Visually hidden but available to assistive technology. This was referenced
+   by table captions before it was defined, which rendered them as stray
+   visible text. Kept as the standard clip-path recipe rather than
+   display:none, which would remove them from the accessibility tree too. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The chart summary is deliberately NOT sr-only. Section 18.4 asks for
+   accessible summaries, and a summary everyone can read is strictly better
+   than one only a screen reader gets. */
+.chart-summary {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 10px;
+  max-width: 70ch;
+}
+
+.uplot {
+  font-family: inherit;
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--muted);
+  margin: 12px 0 6px;
+}

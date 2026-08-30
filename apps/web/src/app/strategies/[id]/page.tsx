@@ -14,6 +14,7 @@
 import { notFound } from 'next/navigation';
 import { serverApiClient } from '../../../lib/server-client';
 import { EvidenceValue } from '../../../components/EvidenceLabel';
+import { EquityChart } from '../../../components/EquityChart';
 import type {
   AuditEvent,
   BacktestRun,
@@ -298,29 +299,14 @@ export default async function StrategyDetailPage({
             <NoEvidence what="equity points" />
           ) : (
             <>
-              <h2>Equity</h2>
+              <h2>Equity and drawdown</h2>
               <p className="subtitle">
-                Reconstructed from the trade ledger and the declared initial capital, not read from
-                the source report.
+                Reconstructed from the trade ledger and the declared initial capital, not read
+                from the source report. Equity and drawdown are separate panels sharing one time
+                axis: overlaying them on twin axes would invite a relationship the scaling
+                invented.
               </p>
-              {/* Charts are still to come. A table is not a chart, but it is
-                  accurate, which a placeholder chart would not be. */}
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Bar time (UTC)</th>
-                    <th scope="col">Equity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {equity.items.map((point) => (
-                    <tr key={point.id}>
-                      <td>{point.barTime.slice(0, 16).replace('T', ' ')}</td>
-                      <td>{money(point.equity)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <EquityChart points={equity.items} scope="IN_SAMPLE" />
             </>
           )
         ) : null}
