@@ -38,7 +38,59 @@ export interface StrategyVersion {
   readonly state: WorkflowState;
   readonly definitionHash: string;
   readonly sourceHash: string | null;
+  readonly manifestHash: string | null;
   readonly createdAt: string;
+}
+
+export interface StrategyDefinitionRecord {
+  readonly id: string;
+  readonly strategyVersionId: string;
+  readonly schemaVersion: string;
+  readonly document: Record<string, unknown>;
+}
+
+export interface PineRevision {
+  readonly id: string;
+  readonly strategyVersionId: string;
+  readonly sourceHash: string;
+  readonly manifestHash: string;
+  readonly artefactKey: string;
+  readonly createdAt: string;
+}
+
+export interface Verification {
+  readonly id: string;
+  readonly strategyVersionId: string;
+  readonly status: 'REQUESTED' | 'AWAITING_UPLOAD' | 'PARSING' | 'PARSED' | 'FAILED';
+  readonly requiredSymbol: string;
+  readonly requiredTimeframe: string;
+  readonly requiredSourceHash: string;
+  readonly uploads?: readonly { id: string; reportType: string; createdAt: string }[];
+}
+
+export interface Trade {
+  readonly id: string;
+  readonly sequence: number;
+  readonly direction: string;
+  readonly entryTime: string;
+  readonly exitTime: string | null;
+  readonly entryPrice: string;
+  readonly exitPrice: string | null;
+  readonly profit: string | null;
+}
+
+export interface EquityPoint {
+  readonly id: string;
+  readonly barTime: string;
+  readonly equity: string;
+}
+
+export interface MetricSnapshot {
+  readonly id: string;
+  readonly runId: string;
+  readonly scope: string;
+  readonly calculationVersion: string;
+  readonly metrics: Record<string, unknown>;
 }
 
 export interface ParityReport {
@@ -46,6 +98,20 @@ export interface ParityReport {
   readonly runId: string;
   readonly verdict: 'PASS' | 'WARN' | 'FAIL' | 'INSUFFICIENT_DATA';
   readonly firstDivergence: { field: string; reported: string; calculated: string } | null;
+  readonly checkedFields: readonly string[];
+}
+
+export interface AuditEvent {
+  readonly id: string;
+  readonly actor: string;
+  readonly action: string;
+  readonly aggregate: string;
+  readonly aggregateId: string;
+  readonly priorState: Record<string, unknown> | null;
+  readonly newState: Record<string, unknown> | null;
+  readonly reason: string | null;
+  readonly traceId: string;
+  readonly createdAt: string;
 }
 
 /** The problem-details shape the API returns (section 7.5). */
@@ -115,10 +181,24 @@ export class ApiClient {
     return (await response.json()) as T;
   }
 
+  /** Returns null for a 404 so a screen can render an empty state, not an error. */
+  async #optional<T>(path: string): Promise<T | null> {
+    try {
+      return await this.#request<T>(path);
+    } catch (error) {
+      if (error instanceof ApiError && error.problem.status === 404) return null;
+      throw error;
+    }
+  }
+
   listCampaigns(limit = 25, after?: string): Promise<Page<Campaign>> {
     const query = new URLSearchParams({ limit: String(limit) });
     if (after) query.set('after', after);
     return this.#request(`/v1/campaigns?${query.toString()}`);
+  }
+
+  getCampaign(id: string): Promise<Campaign | null> {
+    return this.#optional(`/v1/campaigns/${id}`);
   }
 
   listStrategies(limit = 25, after?: string): Promise<Page<Strategy>> {
@@ -131,10 +211,37 @@ export class ApiClient {
     return this.#request(`/v1/strategies/${strategyId}/versions`);
   }
 
-  getParity(runId: string): Promise<ParityReport> {
-    return this.#request(`/v1/backtest-runs/${runId}/parity`);
+  getDefinition(versionId: string): Promise<StrategyDefinitionRecord | null> {
+    return this.#optional(`/v1/versions/${versionId}/definition`);
+  }
+
+  listPineRevisions(versionId: string): Promise<Page<PineRevision>> {
+    return this.#request(`/v1/versions/${versionId}/pine-revisions`);
+  }
+
+  getVerification(id: string): Promise<Verification | null> {
+    return this.#optional(`/v1/tradingview-verifications/${id}`);
+  }
+
+  listTrades(runId: string, limit = 100): Promise<Page<Trade>> {
+    return this.#request(`/v1/backtest-runs/${runId}/trades?limit=${limit}`);
+  }
+
+  getEquity(runId: string): Promise<Page<EquityPoint>> {
+    return this.#request(`/v1/backtest-runs/${runId}/equity`);
+  }
+
+  getMetrics(runId: string, stage = 'IN_SAMPLE'): Promise<Page<MetricSnapshot>> {
+    return this.#request(`/v1/backtest-runs/${runId}/metrics?stage=${stage}`);
+  }
+
+  getParity(runId: string): Promise<ParityReport | null> {
+    return this.#optional(`/v1/backtest-runs/${runId}/parity`);
+  }
+
+  getAudit(versionId: string): Promise<Page<AuditEvent>> {
+    return this.#request(`/v1/versions/${versionId}/audit`);
   }
 }
 
-/** Approval levels a version can hold, re-exported so screens need not import twice. */
 export type { ApprovalLevel, WorkflowState };
