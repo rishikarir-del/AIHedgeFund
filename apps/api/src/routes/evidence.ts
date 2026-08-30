@@ -34,6 +34,24 @@ async function requireRun(db: Database, runId: string, organisationId: string) {
 }
 
 export function registerEvidenceRoutes(app: FastifyInstance, db: Database): void {
+  /** Runs attached to a version, so a detail screen can find its evidence. */
+  app.get<{ Params: { id: string } }>('/v1/versions/:id/backtest-runs', async (request, reply) => {
+    const actor = guard(request, 'strategy:read');
+
+    const rows = await db
+      .select()
+      .from(backtestRuns)
+      .where(
+        and(
+          eq(backtestRuns.strategyVersionId, request.params.id),
+          eq(backtestRuns.organisationId, actor.organisationId),
+        ),
+      )
+      .orderBy(asc(backtestRuns.createdAt));
+
+    return reply.send({ items: rows, nextCursor: null });
+  });
+
   app.get<{ Params: { id: string } }>('/v1/backtest-runs/:id', async (request, reply) => {
     const actor = guard(request, 'strategy:read');
     return reply.send(await requireRun(db, request.params.id, actor.organisationId));

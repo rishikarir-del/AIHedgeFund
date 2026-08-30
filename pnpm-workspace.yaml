@@ -1,6 +1,7 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - 'e2e'
 
 allowBuilds:
   # esbuild ships a platform binary and needs its postinstall to run. It is a

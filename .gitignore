@@ -25,3 +25,7 @@ test-results/
 # Next.js
 .next/
 next-env.d.ts
+
+# Playwright
+e2e/test-results/
+e2e/playwright-report/

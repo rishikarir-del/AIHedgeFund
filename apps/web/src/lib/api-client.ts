@@ -93,6 +93,15 @@ export interface MetricSnapshot {
   readonly metrics: Record<string, unknown>;
 }
 
+export interface BacktestRun {
+  readonly id: string;
+  readonly strategyVersionId: string;
+  readonly source: string;
+  readonly symbol: string;
+  readonly timeframe: string;
+  readonly initialCapital: string;
+  readonly createdAt: string;
+}
 export interface ParityReport {
   readonly id: string;
   readonly runId: string;
@@ -239,6 +248,9 @@ export class ApiClient {
     return this.#optional(`/v1/backtest-runs/${runId}/parity`);
   }
 
+  listRuns(versionId: string): Promise<Page<BacktestRun>> {
+    return this.#request(`/v1/versions/${versionId}/backtest-runs`);
+  }
   getAudit(versionId: string): Promise<Page<AuditEvent>> {
     return this.#request(`/v1/versions/${versionId}/audit`);
   }

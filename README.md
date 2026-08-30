@@ -427,6 +427,21 @@ The orchestration state machine belongs to ARF-OS. Core research governance shou
 | [`schemas/parity-report.schema.json`](./schemas/parity-report.schema.json) | Reported-versus-calculated comparison |
 | `schemas/signal-event.schema.json` _(milestone 15)_ | TradingView forward-test signal-event schema |
 
+### Implementation documentation
+
+The specification above describes the intended system. These describe what
+has actually been built:
+
+| Document | Purpose |
+|---|---|
+| [`docs/local-setup.md`](./docs/local-setup.md) | Running the stack, with and without containers |
+| [`docs/architecture.md`](./docs/architecture.md) | Package and application structure, ingestion pipeline |
+| [`docs/database.md`](./docs/database.md) | Schema conventions and the 23 tables |
+| [`docs/report-parser.md`](./docs/report-parser.md) | TradingView parsing, ambiguity rules, fixtures |
+| [`docs/api-examples.md`](./docs/api-examples.md) | Worked requests against every endpoint group |
+| [`docs/troubleshooting.md`](./docs/troubleshooting.md) | Failures encountered during development, with diagnoses |
+| [`docs/adr/`](./docs/adr/) | Architecture decisions 0001 to 0005 |
+
 ### Recommended reading order
 
 1. `README.md`

@@ -6,15 +6,20 @@
  * someone the exact evidence they are questioning.
  *
  * Section 18.2: tested Pine revisions are read-only, and editing creates a
- * child version. There is no edit affordance anywhere on this page; the Pine
- * tab says so explicitly rather than leaving its absence to be inferred.
+ * child version. There is no edit affordance anywhere on this page.
+ *
+ * Section 18.1: every figure states its scope and provenance. Reported and
+ * independently calculated values are never merged into one number.
  */
 import { notFound } from 'next/navigation';
 import { serverApiClient } from '../../../lib/server-client';
+import { EvidenceValue } from '../../../components/EvidenceLabel';
 import type {
   AuditEvent,
+  BacktestRun,
   PineRevision,
   StrategyVersion,
+  Trade,
 } from '../../../lib/api-client';
 
 export const dynamic = 'force-dynamic';
@@ -59,6 +64,13 @@ function NoEvidence({ what }: { what: string }) {
   );
 }
 
+function money(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  // Trim the fixed 8-decimal storage scale to something readable, without
+  // rounding the stored value itself.
+  return Number(value).toFixed(2);
+}
+
 export default async function StrategyDetailPage({
   params,
   searchParams,
@@ -80,20 +92,30 @@ export default async function StrategyDetailPage({
   const tab: Tab = TABS.includes(query.tab as Tab) ? (query.tab as Tab) : 'evidence';
   const href = (t: Tab) => `/strategies/${id}?tab=${t}&version=${selected.id}`;
 
-  const [definition, pine, audit] = await Promise.all([
-    tab === 'sdl' || tab === 'evidence' ? client.getDefinition(selected.id) : Promise.resolve(null),
-    tab === 'pine' || tab === 'evidence'
-      ? client.listPineRevisions(selected.id)
-      : Promise.resolve({ items: [], nextCursor: null }),
+  const runsPage = await client.listRuns(selected.id);
+  const run: BacktestRun | undefined = runsPage.items.at(-1);
+
+  const [definition, pine, audit, trades, equity, metrics, parity] = await Promise.all([
+    client.getDefinition(selected.id),
+    client.listPineRevisions(selected.id),
     tab === 'audit' ? client.getAudit(selected.id) : Promise.resolve({ items: [], nextCursor: null }),
+    run && tab === 'trades'
+      ? client.listTrades(run.id)
+      : Promise.resolve({ items: [], nextCursor: null }),
+    run && tab === 'equity' ? client.getEquity(run.id) : Promise.resolve({ items: [], nextCursor: null }),
+    run && (tab === 'metrics' || tab === 'evidence')
+      ? client.getMetrics(run.id)
+      : Promise.resolve({ items: [], nextCursor: null }),
+    run ? client.getParity(run.id) : Promise.resolve(null),
   ]);
+
+  const snapshot = metrics.items[0];
+  const values = (snapshot?.metrics ?? {}) as Record<string, unknown>;
 
   return (
     <>
       <h1>Strategy detail</h1>
       <p className="subtitle">
-        {/* The exact version is always visible: section 18.3 requires a
-            reviewer to know precisely what they are looking at. */}
         Version {selected.versionNumber} <span className="badge">{selected.state}</span>
         <span className="provenance trace">definition {selected.definitionHash.slice(0, 12)}…</span>
       </p>
@@ -136,15 +158,40 @@ export default async function StrategyDetailPage({
                   <td>{pine.items.length}</td>
                 </tr>
                 <tr>
-                  <th scope="row">Source hash</th>
-                  <td className="trace">{selected.sourceHash ?? 'not yet stored'}</td>
+                  <th scope="row">Backtest runs</th>
+                  <td>{runsPage.items.length}</td>
+                </tr>
+                <tr>
+                  <th scope="row">Parity verdict</th>
+                  <td className="verdict" data-verdict={parity?.verdict ?? 'INSUFFICIENT_DATA'}>
+                    {parity?.verdict ?? 'not evaluated'}
+                  </td>
                 </tr>
               </tbody>
             </table>
-            <p className="subtitle" style={{ marginTop: 16 }}>
-              Backtest, parity and validation evidence attach to runs. Until a run exists this
-              version cannot be promoted, and the workflow engine will refuse.
-            </p>
+            {snapshot ? (
+              <dl style={{ marginTop: 20 }}>
+                <EvidenceValue
+                  label="Net profit"
+                  value={money(values['netProfit'] as string)}
+                  scope="IN_SAMPLE"
+                  provenance="arf_calculated"
+                  net
+                />
+                <EvidenceValue
+                  label="Closed trades"
+                  value={String(values['closedTradeCount'] ?? '')}
+                  scope="IN_SAMPLE"
+                  provenance="arf_calculated"
+                />
+                <EvidenceValue
+                  label="Max drawdown"
+                  value={money(values['maxDrawdown'] as string)}
+                  scope="IN_SAMPLE"
+                  provenance="arf_calculated"
+                />
+              </dl>
+            ) : null}
           </>
         ) : null}
 
@@ -196,6 +243,183 @@ export default async function StrategyDetailPage({
           )
         ) : null}
 
+        {tab === 'trades' ? (
+          trades.items.length === 0 ? (
+            <NoEvidence what="trades" />
+          ) : (
+            <>
+              <h2>Trades</h2>
+              <p className="subtitle">
+                Normalised from the source ledger. Simulated, historical.{' '}
+                <span className="badge" data-scope="IN_SAMPLE">
+                  In-sample
+                </span>
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Direction</th>
+                    <th scope="col">Entry</th>
+                    <th scope="col">Exit</th>
+                    <th scope="col">Profit (net)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trades.items.map((trade: Trade) => (
+                    <tr key={trade.id}>
+                      <td>{trade.sequence}</td>
+                      <td>{trade.direction}</td>
+                      <td>{trade.entryTime.slice(0, 16).replace('T', ' ')}</td>
+                      <td>
+                        {trade.exitTime ? (
+                          trade.exitTime.slice(0, 16).replace('T', ' ')
+                        ) : (
+                          <em className="unknown">open</em>
+                        )}
+                      </td>
+                      <td>
+                        {trade.profit === null ? (
+                          <em className="unknown">not realised</em>
+                        ) : (
+                          money(trade.profit)
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )
+        ) : null}
+
+        {tab === 'equity' ? (
+          equity.items.length === 0 ? (
+            <NoEvidence what="equity points" />
+          ) : (
+            <>
+              <h2>Equity</h2>
+              <p className="subtitle">
+                Reconstructed from the trade ledger and the declared initial capital, not read from
+                the source report.
+              </p>
+              {/* Charts are still to come. A table is not a chart, but it is
+                  accurate, which a placeholder chart would not be. */}
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Bar time (UTC)</th>
+                    <th scope="col">Equity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {equity.items.map((point) => (
+                    <tr key={point.id}>
+                      <td>{point.barTime.slice(0, 16).replace('T', ' ')}</td>
+                      <td>{money(point.equity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )
+        ) : null}
+
+        {tab === 'metrics' ? (
+          !snapshot ? (
+            <NoEvidence what="metric snapshots" />
+          ) : (
+            <>
+              <h2>Metrics</h2>
+              <p className="subtitle">
+                Calculation version {snapshot.calculationVersion}. Scope {snapshot.scope}.
+                Independently computed from the ledger.
+              </p>
+              <dl>
+                <EvidenceValue
+                  label="Net profit"
+                  value={money(values['netProfit'] as string)}
+                  scope="IN_SAMPLE"
+                  provenance="arf_calculated"
+                  net
+                />
+                <EvidenceValue
+                  label="Gross profit"
+                  value={money(values['grossProfit'] as string)}
+                  scope="IN_SAMPLE"
+                  provenance="arf_calculated"
+                  net={false}
+                />
+                <EvidenceValue
+                  label="Max drawdown"
+                  value={money(values['maxDrawdown'] as string)}
+                  scope="IN_SAMPLE"
+                  provenance="arf_calculated"
+                />
+                <EvidenceValue
+                  label="Max runup"
+                  value={money(values['maxRunup'] as string)}
+                  scope="IN_SAMPLE"
+                  provenance="arf_calculated"
+                />
+                <EvidenceValue
+                  label="Profit factor"
+                  value={values['profitFactor'] === null ? null : String(values['profitFactor'])}
+                  scope="IN_SAMPLE"
+                  provenance="arf_calculated"
+                />
+              </dl>
+              {Array.isArray(values['warnings']) && (values['warnings'] as string[]).length > 0 ? (
+                <div className="state-machine">
+                  <strong>Calculation warnings</strong>
+                  <ul>
+                    {(values['warnings'] as string[]).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </>
+          )
+        ) : null}
+
+        {tab === 'verification' ? (
+          parity ? (
+            <>
+              <h2>Parity</h2>
+              <p className="subtitle">
+                Verdict{' '}
+                <span className="verdict" data-verdict={parity.verdict}>
+                  {parity.verdict}
+                </span>
+              </p>
+              {parity.firstDivergence ? (
+                <table>
+                  <tbody>
+                    <tr>
+                      <th scope="row">First divergence</th>
+                      <td>{parity.firstDivergence.field}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">Reported</th>
+                      <td>{parity.firstDivergence.reported}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">Calculated</th>
+                      <td>{parity.firstDivergence.calculated}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              ) : (
+                <p className="subtitle">No divergence found across the checked fields.</p>
+              )}
+              <p className="subtitle">Checked: {parity.checkedFields.join(', ')}</p>
+            </>
+          ) : (
+            <NoEvidence what="parity report" />
+          )
+        ) : null}
+
         {tab === 'audit' ? (
           audit.items.length === 0 ? (
             <NoEvidence what="audit events" />
@@ -231,9 +455,7 @@ export default async function StrategyDetailPage({
           )
         ) : null}
 
-        {(['verification', 'trades', 'equity', 'metrics', 'lineage', 'decisions'] as Tab[]).includes(
-          tab,
-        ) ? (
+        {(['lineage', 'decisions'] as Tab[]).includes(tab) ? (
           <>
             <h2>{TAB_LABELS[tab]}</h2>
             <NoEvidence what={TAB_LABELS[tab].toLowerCase()} />

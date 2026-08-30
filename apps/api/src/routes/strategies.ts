@@ -6,7 +6,7 @@
  * definition, or on a Pine revision. Changing any of them means creating a
  * child version, which is what POST /versions does.
  */
-import { and, asc, eq, gt } from 'drizzle-orm';
+import { and, asc, desc, eq, lt } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { StrategyDefinitionSchema } from '@arf/contracts';
@@ -53,15 +53,19 @@ export function registerStrategyRoutes(app: FastifyInstance, db: Database): void
     const actor = guard(request, 'strategy:read');
     const page = parsePageRequest(request.query as Record<string, string | undefined>);
 
+    // Newest first. UUIDv7 sorts chronologically, so descending id is
+    // descending creation time and the cursor walks backwards with `lt`.
+    // Ascending would push the most recent work off the end of the first page,
+    // which is exactly the work a researcher is looking for.
     const rows = await db
       .select()
       .from(strategies)
       .where(
         page.after
-          ? and(eq(strategies.organisationId, actor.organisationId), gt(strategies.id, page.after))
+          ? and(eq(strategies.organisationId, actor.organisationId), lt(strategies.id, page.after))
           : eq(strategies.organisationId, actor.organisationId),
       )
-      .orderBy(asc(strategies.id))
+      .orderBy(desc(strategies.id))
       .limit(page.limit + 1);
 
     return reply.send(buildPage(rows, page.limit));
