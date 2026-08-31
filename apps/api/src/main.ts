@@ -7,6 +7,7 @@
  */
 import { ClerkTokenVerifier, DevTokenVerifier, type TokenVerifier } from '@arf/auth';
 import { ObjectStore, createDb } from '@arf/db';
+import { BullMqInspector } from '@arf/event-bus';
 import { buildApp } from './server.js';
 import { describeConfig, loadConfig, objectStoreConfigured } from './config.js';
 
@@ -39,11 +40,21 @@ async function main(): Promise<void> {
       })
     : undefined;
 
-  const app = await buildApp({ db, verifier, objectStore, logger: true });
+  // Absent when no broker is configured. The dashboard then reports queue
+  // depth as null rather than zero: unseen is not the same as empty.
+  const redisUrl = process.env['REDIS_URL'];
+  const queueInspector = redisUrl
+    ? new BullMqInspector({ connectionUrl: redisUrl, prefix: 'arf' })
+    : undefined;
+
+  const app = await buildApp({ db, verifier, objectStore, queueInspector, logger: true });
 
   app.log.info(describeConfig(config), 'starting api');
   if (config.AUTH_DEV_MODE) {
     app.log.warn('AUTH_DEV_MODE is enabled: bearer tokens of the form "dev:<subject>" are accepted');
+  }
+  if (!queueInspector) {
+    app.log.warn('REDIS_URL is not set; the dashboard will report queue depth as unavailable');
   }
   if (!objectStore) {
     app.log.warn('object storage is not configured; verification upload routes are disabled');
@@ -59,6 +70,7 @@ async function main(): Promise<void> {
     try {
       await app.close();
       objectStore?.destroy();
+      await queueInspector?.close();
       await sql.end({ timeout: 5 });
       process.exit(0);
     } catch (error) {

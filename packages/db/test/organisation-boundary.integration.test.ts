@@ -7,7 +7,7 @@
  * unit-tested; this proves the storage layer actually enforces what the policy
  * assumes.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type Database } from '../src/client.js';
 import { uuidv7 } from '../src/ids.js';
@@ -141,26 +141,36 @@ describe('transactions (CLAUDE.md 9.3)', () => {
   });
 
   it('commits the outbox event in the same transaction as the change', async () => {
-    const traceId = `outbox-${Date.now()}`;
+    let campaignId = '';
 
     await db.transaction(async (tx) => {
       const [campaign] = await tx
         .insert(campaignsTable)
-        .values({ organisationId: orgA, name: traceId, brief: 'x', createdBy: userA })
+        .values({ organisationId: orgA, name: `outbox-${Date.now()}`, brief: 'x', createdBy: userA })
         .returning();
+      campaignId = campaign!.id;
       await tx.insert(outboxEvents).values({
         eventType: 'campaign.created',
-        payload: { campaignId: campaign!.id },
+        payload: { campaignId },
       });
     });
 
-    const unpublished = await db
+    // Identify the row by its payload rather than by position. The previous
+    // version selected without an ORDER BY and took the last element, which
+    // is not guaranteed to be the row just written -- and broke as soon as
+    // the outbox relay published an earlier campaign.created event.
+    const [written] = await db
       .select()
       .from(outboxEvents)
-      .where(eq(outboxEvents.eventType, 'campaign.created'));
+      .where(eq(outboxEvents.eventType, 'campaign.created'))
+      .orderBy(desc(outboxEvents.createdAt))
+      .limit(1);
 
-    expect(unpublished.length).toBeGreaterThan(0);
+    expect(written).toBeDefined();
+    expect((written!.payload as { campaignId: string }).campaignId).toBe(campaignId);
     // Written but not yet dispatched: publication is a separate step.
-    expect(unpublished.at(-1)?.publishedAt).toBeNull();
+    expect(written!.publishedAt).toBeNull();
+
+    await db.delete(outboxEvents).where(eq(outboxEvents.id, written!.id));
   });
 });

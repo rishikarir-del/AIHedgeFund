@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { TokenVerifier } from '@arf/auth';
+import type { QueueInspector } from '@arf/event-bus';
 import { deriveObjectKey, validateUpload, type Database, type ObjectStore } from '@arf/db';
 import { toProblemDetails } from './errors.js';
 import { auth } from './plugins/auth.js';
@@ -16,12 +17,15 @@ import { registerStrategyRoutes } from './routes/strategies.js';
 import { registerVerificationRoutes } from './routes/verification.js';
 import { registerEvidenceRoutes } from './routes/evidence.js';
 import { registerDecisionRoutes } from './routes/decisions.js';
+import { registerDashboardRoutes } from './routes/dashboard.js';
 
 export interface BuildAppOptions {
   readonly db: Database;
   readonly verifier: TokenVerifier;
   /** Optional so tests that never touch storage need not stand up MinIO. */
   readonly objectStore?: ObjectStore | undefined;
+  /** Optional so tests and offline runs need no broker. */
+  readonly queueInspector?: QueueInspector | undefined;
   readonly logger?: boolean;
 }
 
@@ -67,6 +71,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   registerStrategyRoutes(app, options.db);
   registerEvidenceRoutes(app, options.db);
   registerDecisionRoutes(app, options.db);
+  registerDashboardRoutes(app, options.db, options.queueInspector);
 
   if (options.objectStore) {
     registerVerificationRoutes(

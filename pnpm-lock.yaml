@@ -47,6 +47,9 @@ importers:
       '@arf/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@arf/event-bus':
+        specifier: workspace:*
+        version: link:../../packages/event-bus
       '@arf/metrics':
         specifier: workspace:*
         version: link:../../packages/metrics

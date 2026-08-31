@@ -4,15 +4,34 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "composite": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "references": [
-    { "path": "../../packages/contracts" },
-    { "path": "../../packages/auth" },
-    { "path": "../../packages/db" },
-    { "path": "../../packages/workflow" },
-    { "path": "../../packages/pine" },
-    { "path": "../../packages/metrics" }
+    {
+      "path": "../../packages/contracts"
+    },
+    {
+      "path": "../../packages/auth"
+    },
+    {
+      "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/workflow"
+    },
+    {
+      "path": "../../packages/pine"
+    },
+    {
+      "path": "../../packages/metrics"
+    },
+    {
+      "path": "../../packages/event-bus"
+    }
   ]
 }
