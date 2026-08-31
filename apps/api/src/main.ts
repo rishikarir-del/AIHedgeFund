@@ -7,7 +7,7 @@
  */
 import { ClerkTokenVerifier, DevTokenVerifier, type TokenVerifier } from '@arf/auth';
 import { ObjectStore, createDb } from '@arf/db';
-import { BullMqInspector } from '@arf/event-bus';
+import { BullMqInspector, BullMqQueue } from '@arf/event-bus';
 import { buildApp } from './server.js';
 import { describeConfig, loadConfig, objectStoreConfigured } from './config.js';
 
@@ -47,7 +47,12 @@ async function main(): Promise<void> {
     ? new BullMqInspector({ connectionUrl: redisUrl, prefix: 'arf' })
     : undefined;
 
-  const app = await buildApp({ db, verifier, objectStore, queueInspector, logger: true });
+  // The API only ever enqueues; workers consume. It registers no handlers,
+  // which is what keeps section 3.2 true: workers do not own lifecycle state
+  // and the API does not execute jobs.
+  const queue = redisUrl ? new BullMqQueue({ connectionUrl: redisUrl, prefix: 'arf' }) : undefined;
+
+  const app = await buildApp({ db, verifier, objectStore, queueInspector, queue, logger: true });
 
   app.log.info(describeConfig(config), 'starting api');
   if (config.AUTH_DEV_MODE) {
@@ -71,6 +76,7 @@ async function main(): Promise<void> {
       await app.close();
       objectStore?.destroy();
       await queueInspector?.close();
+      await queue?.close();
       await sql.end({ timeout: 5 });
       process.exit(0);
     } catch (error) {

@@ -15,8 +15,10 @@
  */
 import { eq } from 'drizzle-orm';
 import {
+  ObjectStore,
   backtestRuns,
   outboxEvents,
+  pineRevisions,
   strategyVersions,
   trades,
   type Database,
@@ -27,12 +29,15 @@ import {
   runWalkForward,
   type SegmentModel,
 } from '@arf/backtest-sdk';
+import { hashPineSource } from '@arf/pine';
 import { computeEvidence } from './compute-evidence.js';
 
 export interface WalkForwardPayload {
   readonly strategyVersionId: string;
   readonly organisationId: string;
-  readonly pineSource: string;
+  /** Object-store key of the stored Pine revision. The source is fetched, not sent: a queue payload is effectively a log, and shipping the script through it would bloat every job record. */
+  readonly artefactKey: string;
+  readonly sourceHash: string;
   readonly symbol: string;
   readonly timeframe: string;
   readonly from: string;
@@ -55,6 +60,7 @@ export interface WalkForwardJobResult {
 
 export async function executeWalkForward(
   db: Database,
+  store: ObjectStore,
   endpoint: string,
   payload: WalkForwardPayload,
 ): Promise<WalkForwardJobResult> {
@@ -63,7 +69,31 @@ export async function executeWalkForward(
     .from(strategyVersions)
     .where(eq(strategyVersions.id, payload.strategyVersionId))
     .limit(1);
-  if (!version) throw new Error(`Strategy version ${payload.strategyVersionId} not found`);
+  if (!version) {
+    throw new Error(`Strategy version ${payload.strategyVersionId} not found`);
+  }
+
+  const [revision] = await db
+    .select()
+    .from(pineRevisions)
+    .where(eq(pineRevisions.strategyVersionId, payload.strategyVersionId))
+    .limit(1);
+  if (!revision) {
+    throw new Error(`Version ${payload.strategyVersionId} has no stored Pine revision`);
+  }
+
+  const pineSource = (await store.getObject(payload.artefactKey)).toString('utf8');
+
+  // The stored source must still hash to what the revision recorded.
+  // Otherwise the evidence would attach to a version it was not produced
+  // from, which is the lineage section 3.1 exists to guarantee.
+  const actualHash = hashPineSource(pineSource);
+  if (actualHash !== payload.sourceHash) {
+    throw new Error(
+      `Stored Pine does not match the revision hash. Expected ${payload.sourceHash}, got ${actualHash}. ` +
+        'Refusing to attach evidence to a version the source did not produce.',
+    );
+  }
 
   const plan = planWalkForward({
     from: payload.from,
@@ -76,7 +106,7 @@ export async function executeWalkForward(
 
   const runner = new McpBacktestRunner({ endpoint });
   const report = await runWalkForward(runner, plan, {
-    pineSource: payload.pineSource,
+    pineSource,
     symbol: payload.symbol,
     timeframe: payload.timeframe,
     initialCapital: payload.initialCapital,

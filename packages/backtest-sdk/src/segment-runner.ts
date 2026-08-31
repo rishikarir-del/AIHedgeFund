@@ -61,6 +61,27 @@ export interface WalkForwardReport {
   readonly warnings: readonly string[];
 }
 
+/**
+ * Raised when every window failed.
+ *
+ * Carries the credits already spent, because that is the fact the caller most
+ * needs: the budget is gone and there is nothing to show for it.
+ */
+export class AllSegmentsFailedError extends Error {
+  readonly runsSpent: number;
+  readonly firstError: string;
+
+  constructor(runsSpent: number, firstError: string) {
+    super(
+      `Every segment failed after spending ${runsSpent} run(s). First error: ${firstError}. ` +
+        'Reporting success here would hide a total failure that has already cost the full budget.',
+    );
+    this.name = 'AllSegmentsFailedError';
+    this.runsSpent = runsSpent;
+    this.firstError = firstError;
+  }
+}
+
 export class BudgetExceededError extends Error {
   constructor(required: number, allowed: number) {
     super(
@@ -150,11 +171,20 @@ export async function runWalkForward(
 
   const completed = folds.filter((f) => f.outOfSampleNetProfit !== null).length;
   const profitable = folds.filter((f) => f.outOfSampleProfitable === true).length;
+  const succeeded = outcomes.filter((o) => o.result !== null).length;
 
   if (completed > 0 && profitable === 0) {
     warnings.push(
       'No fold was profitable out of sample. This is the expected signature of an overfitted strategy.',
     );
+  }
+
+  // Treating a per-fold failure as a warning lets a partial sweep still yield
+  // evidence, which is right. Applying that to a sweep where EVERY window
+  // failed is wrong: it reports success, having spent the full budget and
+  // produced nothing. That is worse than an error, because nobody looks.
+  if (outcomes.length > 0 && succeeded === 0) {
+    throw new AllSegmentsFailedError(runsSpent, outcomes[0]?.error ?? 'no error recorded');
   }
 
   return {

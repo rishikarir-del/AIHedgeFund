@@ -71,7 +71,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   app.get('/health', async () => ({ status: 'ok' }));
 
   registerCampaignRoutes(app, options.db);
-  registerStrategyRoutes(app, options.db);
+  registerStrategyRoutes(app, options.db, options.objectStore);
   registerEvidenceRoutes(app, options.db);
   registerDecisionRoutes(app, options.db);
   registerDashboardRoutes(app, options.db, options.queueInspector);

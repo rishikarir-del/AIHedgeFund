@@ -42,7 +42,7 @@ export function registerHandlers(queue: JobQueue, db: Database, store: ObjectSto
   const engineEndpoint = process.env['MCP_ENGINE_URL'];
   if (engineEndpoint) {
     queue.register<WalkForwardPayload>(QUEUES.walkForward, async ({ payload }) => {
-      await executeWalkForward(db, engineEndpoint, payload);
+      await executeWalkForward(db, store, engineEndpoint, payload);
     });
   }
 }

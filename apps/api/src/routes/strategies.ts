@@ -19,6 +19,7 @@ import {
   type Database,
 } from '@arf/db';
 import { hashPineSource, hashManifest, lintPineSource, hasBlockingFindings } from '@arf/pine';
+import { deriveObjectKey, type ObjectStore } from '@arf/db';
 import { Errors } from '../errors.js';
 import { guard, parseBody } from '../lib/guards.js';
 import { claimIdempotencyKey, recordIdempotentResult } from '../plugins/idempotency.js';
@@ -40,7 +41,9 @@ const CreateVersionBody = z.object({
 const CreatePineRevisionBody = z.object({
   source: z.string().min(1),
   manifest: z.record(z.string(), z.unknown()),
-  artefactKey: z.string().min(1),
+  // artefactKey is deliberately NOT accepted from the client. It is derived
+  // from the organisation and the content hash so a caller cannot point a
+  // revision at an object it does not own (section 19).
 });
 
 function idempotencyKeyOf(headers: Record<string, unknown>): string | undefined {
@@ -48,7 +51,11 @@ function idempotencyKeyOf(headers: Record<string, unknown>): string | undefined 
   return typeof key === 'string' ? key : undefined;
 }
 
-export function registerStrategyRoutes(app: FastifyInstance, db: Database): void {
+export function registerStrategyRoutes(
+  app: FastifyInstance,
+  db: Database,
+  store: ObjectStore | undefined,
+): void {
   app.get('/v1/strategies', async (request, reply) => {
     const actor = guard(request, 'strategy:read');
     const page = parsePageRequest(request.query as Record<string, string | undefined>);
@@ -232,13 +239,27 @@ export function registerStrategyRoutes(app: FastifyInstance, db: Database): void
     const sourceHash = hashPineSource(body.source);
     const manifestHash = hashManifest(body.manifest);
 
+    // Section 9.1 makes object storage authoritative for Pine source. Until
+    // this existed the source was hashed, linted and then discarded, so a
+    // revision recorded a key pointing at nothing and no consumer could ever
+    // retrieve the script it claimed to describe.
+    if (!store) {
+      throw Errors.policyRejected(
+        'object_storage_unavailable',
+        'Pine revisions cannot be stored without object storage configured.',
+      );
+    }
+
+    const artefactKey = deriveObjectKey(actor.organisationId, 'pine_source', sourceHash);
+    await store.putObject(artefactKey, Buffer.from(body.source, 'utf8'), 'text/plain');
+
     const [created] = await db
       .insert(pineRevisions)
       .values({
         strategyVersionId: request.params.id,
         sourceHash,
         manifestHash,
-        artefactKey: body.artefactKey,
+        artefactKey,
       })
       .returning();
 
