@@ -5,7 +5,7 @@
  * application, 9.3 requires a transactional outbox for reliable event
  * emission, and 3.6 requires every side-effecting command to be idempotent.
  */
-import { index, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { uuidv7 } from '../ids.js';
 import { organisations, users } from './identity.js';
 import { strategyVersions } from './research.js';
@@ -103,4 +103,34 @@ export const idempotencyRecords = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique('idempotency_org_key_uq').on(t.organisationId, t.idempotencyKey)],
+);
+
+/**
+ * Operator mandate (spec section 26).
+ *
+ * The thresholds a strategy must clear are the operator's to set, not the
+ * system's to assume. Section 26.5 makes a mandate immutable and versioned, so
+ * this table is insert-only: changing a threshold writes a new version and the
+ * previous one is retained, which is what lets a past decision still be read
+ * against the bar that was in force when it was made.
+ *
+ * Section 26.6 forbids an agent widening a mandate. Nothing in the codebase
+ * writes here except an explicit operator request.
+ */
+export const operatorMandates = pgTable(
+  'operator_mandates',
+  {
+    id: uuid('id').primaryKey().$defaultFn(uuidv7),
+    organisationId: uuid('organisation_id')
+      .notNull()
+      .references(() => organisations.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    /** Evidence and risk posture: the numbers the star is computed against. */
+    thresholds: jsonb('thresholds').notNull(),
+    signedBy: uuid('signed_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('operator_mandates_org_version_uq').on(t.organisationId, t.version)],
 );

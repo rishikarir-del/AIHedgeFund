@@ -26,6 +26,7 @@ import {
   type Database,
 } from '@arf/db';
 import { guard } from '../lib/guards.js';
+import { loadThresholds } from './mandate.js';
 
 /** Every workflow state, so the funnel shows zeros rather than omitting them. */
 const FUNNEL_ORDER = [
@@ -144,6 +145,7 @@ export { sql };
 export function registerMarketRoutes(app: FastifyInstance, db: Database): void {
   app.get('/v1/markets', async (request, reply) => {
     const actor = guard(request, 'strategy:read');
+    const { thresholds, version: mandateVersion } = await loadThresholds(db, actor.organisationId);
 
     const rows = await db
       .select({
@@ -237,13 +239,21 @@ export function registerMarketRoutes(app: FastifyInstance, db: Database): void {
     const items = [...markets.values()].map((m) => {
       // Every gate must hold. These are the same conditions the workflow
       // engine applies at promotion, reported here rather than re-invented.
+      // Every threshold is the operator's, read from the signed mandate.
+      // Section 26.6: an agent may not infer or widen these.
+      const foldRatio =
+        m.outOfSampleRuns > 0 ? m.outOfSampleProfitable / m.outOfSampleRuns : 0;
+      const winRate = m.winRateWeight > 0 ? m.winRateWeightedSum / m.winRateWeight : null;
+
       const gates = {
-        hasOutOfSample: m.outOfSampleRuns > 0,
-        majorityOfFoldsProfitable:
-          m.outOfSampleRuns > 0 && m.outOfSampleProfitable * 2 > m.outOfSampleRuns,
-        parityNotFailing: !m.anyParityFail,
-        meetsMinimumTrades: m.closedTrades >= 100,
-        hasTradingViewEvidence: m.hasTradingViewEvidence,
+        hasOutOfSample: thresholds.requireOutOfSample ? m.outOfSampleRuns > 0 : true,
+        foldsProfitableRatio: foldRatio >= thresholds.minFoldsProfitableRatio,
+        parityNotFailing: thresholds.requireParityNotFailing ? !m.anyParityFail : true,
+        meetsMinimumTrades: m.closedTrades >= thresholds.minClosedTrades,
+        meetsMinimumWinRate: winRate !== null && winRate >= thresholds.minWinRatePct,
+        hasTradingViewEvidence: thresholds.requireTradingViewEvidence
+          ? m.hasTradingViewEvidence
+          : true,
       };
 
       return {
@@ -255,7 +265,7 @@ export function registerMarketRoutes(app: FastifyInstance, db: Database): void {
         outOfSampleProfitable: m.outOfSampleProfitable,
         closedTrades: m.closedTrades,
         // Null, not zero, when nothing supplied a rate: unknown is not 0%.
-        winRatePct: m.winRateWeight > 0 ? m.winRateWeightedSum / m.winRateWeight : null,
+        winRatePct: winRate,
         gates,
         meetsEvidenceBar: Object.values(gates).every(Boolean),
       };
@@ -263,7 +273,10 @@ export function registerMarketRoutes(app: FastifyInstance, db: Database): void {
 
     return reply.send({
       items: items.sort((a, b) => a.symbol.localeCompare(b.symbol)),
-      note: 'meetsEvidenceBar reports whether stored evidence clears the promotion gates. It is not investment advice, and no value here authorises deploying capital.',
+      thresholds,
+      mandateVersion,
+      note:
+        'meetsEvidenceBar reports whether stored evidence clears the thresholds recorded in the operator mandate. It is not investment advice, and no value here authorises deploying capital.',
       generatedAt: new Date().toISOString(),
     });
   });

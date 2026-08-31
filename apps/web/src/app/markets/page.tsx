@@ -27,20 +27,39 @@ interface Market {
   readonly meetsEvidenceBar: boolean;
 }
 
-const GATE_LABELS: Readonly<Record<string, string>> = {
-  hasOutOfSample: 'Out-of-sample evidence exists',
-  majorityOfFoldsProfitable: 'Majority of folds profitable out of sample',
-  parityNotFailing: 'No parity failure',
-  meetsMinimumTrades: 'At least 100 closed trades',
-  hasTradingViewEvidence: 'TradingView-sourced run present',
-};
+/** Labels are filled from the mandate at render time, so a threshold change
+ *  is reflected in the wording rather than drifting from it. */
+function gateLabels(t: Thresholds): Readonly<Record<string, string>> {
+  return {
+    hasOutOfSample: t.requireOutOfSample ? 'Out-of-sample evidence exists' : 'Out-of-sample not required',
+    foldsProfitableRatio: `At least ${Math.round(t.minFoldsProfitableRatio * 100)}% of folds profitable out of sample`,
+    parityNotFailing: t.requireParityNotFailing ? 'No parity failure' : 'Parity not required',
+    meetsMinimumTrades: `At least ${t.minClosedTrades} closed trades`,
+    meetsMinimumWinRate: `Win rate at least ${t.minWinRatePct}%`,
+    hasTradingViewEvidence: t.requireTradingViewEvidence ? 'TradingView-sourced run present' : 'TradingView evidence not required',
+  };
+}
+
+interface Thresholds {
+  readonly minWinRatePct: number;
+  readonly minFoldsProfitableRatio: number;
+  readonly minClosedTrades: number;
+  readonly maxDrawdownPct: number;
+  readonly requireOutOfSample: boolean;
+  readonly requireTradingViewEvidence: boolean;
+  readonly requireParityNotFailing: boolean;
+}
 
 export default async function MarketsPage() {
   const client = serverApiClient();
   const data = (await client.getMarkets()) as {
     items: readonly Market[];
+    thresholds: Thresholds;
+    mandateVersion: number | null;
     generatedAt: string;
   };
+
+  const GATE_LABELS = gateLabels(data.thresholds);
 
   const starred = data.items.filter((m) => m.meetsEvidenceBar);
 
@@ -121,7 +140,11 @@ export default async function MarketsPage() {
               </p>
             )}
 
-            <p className="subtitle">A star requires all of the following to hold:</p>
+            <p className="subtitle">
+              {data.mandateVersion === null
+                ? 'No mandate has been signed, so these are defaults nobody chose. Set your own before treating a star as meaningful.'
+                : `From operator mandate version ${data.mandateVersion}. A star requires all of the following:`}
+            </p>
             <table>
               <tbody>
                 {Object.entries(GATE_LABELS).map(([key, label]) => (
