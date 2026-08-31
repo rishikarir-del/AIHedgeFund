@@ -134,6 +134,9 @@ importers:
 
   apps/worker-backtest:
     dependencies:
+      '@arf/backtest-sdk':
+        specifier: workspace:*
+        version: link:../../packages/backtest-sdk
       '@arf/db':
         specifier: workspace:*
         version: link:../../packages/db

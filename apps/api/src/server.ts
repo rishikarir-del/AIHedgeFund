@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { TokenVerifier } from '@arf/auth';
-import type { QueueInspector } from '@arf/event-bus';
+import type { JobQueue, QueueInspector } from '@arf/event-bus';
 import { deriveObjectKey, validateUpload, type Database, type ObjectStore } from '@arf/db';
 import { toProblemDetails } from './errors.js';
 import { auth } from './plugins/auth.js';
@@ -18,6 +18,7 @@ import { registerVerificationRoutes } from './routes/verification.js';
 import { registerEvidenceRoutes } from './routes/evidence.js';
 import { registerDecisionRoutes } from './routes/decisions.js';
 import { registerDashboardRoutes } from './routes/dashboard.js';
+import { registerWalkForwardRoutes } from './routes/walk-forward.js';
 
 export interface BuildAppOptions {
   readonly db: Database;
@@ -26,6 +27,8 @@ export interface BuildAppOptions {
   readonly objectStore?: ObjectStore | undefined;
   /** Optional so tests and offline runs need no broker. */
   readonly queueInspector?: QueueInspector | undefined;
+  /** Optional: without it, walk-forward requests are refused rather than dropped. */
+  readonly queue?: JobQueue | undefined;
   readonly logger?: boolean;
 }
 
@@ -72,6 +75,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   registerEvidenceRoutes(app, options.db);
   registerDecisionRoutes(app, options.db);
   registerDashboardRoutes(app, options.db, options.queueInspector);
+  registerWalkForwardRoutes(app, options.db, options.queue);
 
   if (options.objectStore) {
     registerVerificationRoutes(

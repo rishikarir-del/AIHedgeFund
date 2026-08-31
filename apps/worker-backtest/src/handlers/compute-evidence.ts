@@ -24,6 +24,13 @@ import { compareParity, type ParitySide } from '@arf/pine';
 
 export interface ComputeEvidencePayload {
   readonly runId: string;
+  /**
+   * Which body of data this run covers. Defaults to IN_SAMPLE for ordinary
+   * ingestion; a walk-forward fold supplies OUT_OF_SAMPLE for its test half.
+   * Section 14 forbids comparing metrics across scopes, so the scope must
+   * travel with the snapshot rather than being assumed by the reader.
+   */
+  readonly scope?: 'IN_SAMPLE' | 'VALIDATION' | 'OUT_OF_SAMPLE' | 'FINAL_HOLDOUT' | 'FORWARD';
 }
 
 export interface ComputeEvidenceResult {
@@ -76,7 +83,7 @@ export async function computeEvidence(
       .insert(metricSnapshots)
       .values({
         runId: payload.runId,
-        scope: 'IN_SAMPLE',
+        scope: payload.scope ?? 'IN_SAMPLE',
         calculationVersion: CALCULATION_VERSION,
         metrics: metrics,
       })

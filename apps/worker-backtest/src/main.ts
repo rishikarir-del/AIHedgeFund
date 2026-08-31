@@ -10,11 +10,13 @@ import { BullMqQueue, type JobQueue } from '@arf/event-bus';
 import { ObjectStore, createDb, type Database } from '@arf/db';
 import { parseReport, type ParseReportPayload } from './handlers/parse-report.js';
 import { computeEvidence, type ComputeEvidencePayload } from './handlers/compute-evidence.js';
+import { executeWalkForward, type WalkForwardPayload } from './handlers/walk-forward.js';
 import { relayOutbox } from './outbox.js';
 
 export const QUEUES = {
   parseReport: 'report-parse',
   computeEvidence: 'evidence-compute',
+  walkForward: 'walk-forward',
 } as const;
 
 /** Exported so integration tests can register handlers on an InlineQueue. */
@@ -34,6 +36,15 @@ export function registerHandlers(queue: JobQueue, db: Database, store: ObjectSto
   queue.register<ComputeEvidencePayload>(QUEUES.computeEvidence, async ({ payload }) => {
     await computeEvidence(db, payload);
   });
+
+  // The engine endpoint is read here rather than passed through the job
+  // payload: a credential must not travel through a queue (section 19).
+  const engineEndpoint = process.env['MCP_ENGINE_URL'];
+  if (engineEndpoint) {
+    queue.register<WalkForwardPayload>(QUEUES.walkForward, async ({ payload }) => {
+      await executeWalkForward(db, engineEndpoint, payload);
+    });
+  }
 }
 
 async function main(): Promise<void> {

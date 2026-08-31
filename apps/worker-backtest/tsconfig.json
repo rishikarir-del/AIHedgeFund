@@ -4,13 +4,28 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "composite": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "references": [
-    { "path": "../../packages/db" },
-    { "path": "../../packages/event-bus" },
-    { "path": "../../packages/metrics" },
-    { "path": "../../packages/pine" }
+    {
+      "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/event-bus"
+    },
+    {
+      "path": "../../packages/metrics"
+    },
+    {
+      "path": "../../packages/pine"
+    },
+    {
+      "path": "../../packages/backtest-sdk"
+    }
   ]
 }
