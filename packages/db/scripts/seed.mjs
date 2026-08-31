@@ -28,6 +28,10 @@ const SEED_USERS = [
   { subject: 'dev-researcher', email: 'researcher@dev.local', role: 'RESEARCHER' },
   { subject: 'dev-developer', email: 'developer@dev.local', role: 'DEVELOPER' },
   { subject: 'dev-committee', email: 'committee@dev.local', role: 'COMMITTEE_MEMBER' },
+  // org:manage lives only on ADMIN, and setting the operator mandate needs
+  // it. Without this seeded user nobody could set the thresholds the
+  // evidence star is computed against.
+  { subject: 'dev-admin', email: 'admin@dev.local', role: 'ADMIN' },
 ];
 
 try {
