@@ -93,6 +93,38 @@ export interface MetricSnapshot {
   readonly metrics: Record<string, unknown>;
 }
 
+export interface DashboardSummary {
+  readonly campaigns: { readonly total: number };
+  readonly strategies: { readonly total: number };
+  readonly funnel: readonly { readonly state: string; readonly count: number }[];
+  readonly verifications: { readonly pending: number };
+  readonly decisions: {
+    readonly recent: readonly {
+      readonly id: string;
+      readonly outcome: string;
+      readonly rationale: string;
+      readonly strategyVersionId: string;
+      readonly createdAt: string;
+    }[];
+  };
+  readonly parseFailures: {
+    readonly recent: readonly {
+      readonly id: string;
+      readonly payload: Record<string, unknown>;
+      readonly createdAt: string;
+    }[];
+  };
+  /** Null when no broker is configured: unavailable, not empty. */
+  readonly queues: readonly {
+    readonly name: string;
+    readonly waiting: number;
+    readonly active: number;
+    readonly delayed: number;
+    readonly failed: number;
+    readonly completed: number;
+  }[] | null;
+  readonly generatedAt: string;
+}
 export interface BacktestRun {
   readonly id: string;
   readonly strategyVersionId: string;
@@ -198,6 +230,10 @@ export class ApiClient {
       if (error instanceof ApiError && error.problem.status === 404) return null;
       throw error;
     }
+  }
+
+  getDashboard(): Promise<DashboardSummary> {
+    return this.#request(`/v1/dashboard`);
   }
 
   listCampaigns(limit = 25, after?: string): Promise<Page<Campaign>> {
