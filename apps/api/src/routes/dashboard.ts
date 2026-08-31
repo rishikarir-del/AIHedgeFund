@@ -14,9 +14,12 @@ import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { QueueInspector } from '@arf/event-bus';
 import {
+  backtestRuns,
   campaigns,
   committeeDecisions,
+  metricSnapshots,
   outboxEvents,
+  parityReports,
   strategies,
   strategyVersions,
   tradingviewVerifications,
@@ -126,3 +129,142 @@ export function registerDashboardRoutes(
 }
 
 export { sql };
+
+/**
+ * Markets tested, with the evidence each has accumulated.
+ *
+ * The starred column is NOT an investment recommendation, and cannot be. It
+ * reports whether a market's evidence clears the mechanical gates the workflow
+ * engine already enforces for promotion: out-of-sample results exist, parity is
+ * not FAIL, and the closed-trade count meets the section 25 minimum.
+ *
+ * Section 1.3 places live approval outside this system entirely, so nothing
+ * here may present itself as a reason to deploy capital.
+ */
+export function registerMarketRoutes(app: FastifyInstance, db: Database): void {
+  app.get('/v1/markets', async (request, reply) => {
+    const actor = guard(request, 'strategy:read');
+
+    const rows = await db
+      .select({
+        symbol: backtestRuns.symbol,
+        timeframe: backtestRuns.timeframe,
+        runId: backtestRuns.id,
+        source: backtestRuns.source,
+        strategyVersionId: backtestRuns.strategyVersionId,
+      })
+      .from(backtestRuns)
+      .where(eq(backtestRuns.organisationId, actor.organisationId));
+
+    const snapshots = await db
+      .select({
+        runId: metricSnapshots.runId,
+        scope: metricSnapshots.scope,
+        metrics: metricSnapshots.metrics,
+      })
+      .from(metricSnapshots);
+
+    const parities = await db
+      .select({ runId: parityReports.runId, verdict: parityReports.verdict })
+      .from(parityReports);
+
+    const snapshotByRun = new Map(snapshots.map((s) => [s.runId, s]));
+    const parityByRun = new Map(parities.map((p) => [p.runId, p.verdict]));
+
+    const markets = new Map<
+      string,
+      {
+        symbol: string;
+        timeframe: string;
+        runs: number;
+        outOfSampleRuns: number;
+        outOfSampleProfitable: number;
+        closedTrades: number;
+        winRateWeightedSum: number;
+        winRateWeight: number;
+        anyParityFail: boolean;
+        hasTradingViewEvidence: boolean;
+        sources: Set<string>;
+      }
+    >();
+
+    for (const row of rows) {
+      const key = `${row.symbol}|${row.timeframe}`;
+      const entry = markets.get(key) ?? {
+        symbol: row.symbol,
+        timeframe: row.timeframe,
+        runs: 0,
+        outOfSampleRuns: 0,
+        outOfSampleProfitable: 0,
+        closedTrades: 0,
+        winRateWeightedSum: 0,
+        winRateWeight: 0,
+        anyParityFail: false,
+        hasTradingViewEvidence: false,
+        sources: new Set<string>(),
+      };
+
+      entry.runs += 1;
+      entry.sources.add(row.source);
+      if (row.source === 'tradingview_csv') entry.hasTradingViewEvidence = true;
+      if (parityByRun.get(row.runId) === 'FAIL') entry.anyParityFail = true;
+
+      const snapshot = snapshotByRun.get(row.runId);
+      if (snapshot) {
+        const values = snapshot.metrics as Record<string, unknown>;
+        const trades = Number(values['closedTradeCount'] ?? 0);
+        const winRate = values['winRatePct'];
+
+        entry.closedTrades += Number.isFinite(trades) ? trades : 0;
+
+        // Weighted by trade count: a fold with three trades should not move
+        // the aggregate as much as one with sixty.
+        if (typeof winRate === 'number' && Number.isFinite(winRate) && trades > 0) {
+          entry.winRateWeightedSum += winRate * trades;
+          entry.winRateWeight += trades;
+        }
+
+        if (snapshot.scope === 'OUT_OF_SAMPLE') {
+          entry.outOfSampleRuns += 1;
+          const net = Number(values['netProfit'] ?? 0);
+          if (Number.isFinite(net) && net > 0) entry.outOfSampleProfitable += 1;
+        }
+      }
+
+      markets.set(key, entry);
+    }
+
+    const items = [...markets.values()].map((m) => {
+      // Every gate must hold. These are the same conditions the workflow
+      // engine applies at promotion, reported here rather than re-invented.
+      const gates = {
+        hasOutOfSample: m.outOfSampleRuns > 0,
+        majorityOfFoldsProfitable:
+          m.outOfSampleRuns > 0 && m.outOfSampleProfitable * 2 > m.outOfSampleRuns,
+        parityNotFailing: !m.anyParityFail,
+        meetsMinimumTrades: m.closedTrades >= 100,
+        hasTradingViewEvidence: m.hasTradingViewEvidence,
+      };
+
+      return {
+        symbol: m.symbol,
+        timeframe: m.timeframe,
+        runs: m.runs,
+        sources: [...m.sources].sort(),
+        outOfSampleRuns: m.outOfSampleRuns,
+        outOfSampleProfitable: m.outOfSampleProfitable,
+        closedTrades: m.closedTrades,
+        // Null, not zero, when nothing supplied a rate: unknown is not 0%.
+        winRatePct: m.winRateWeight > 0 ? m.winRateWeightedSum / m.winRateWeight : null,
+        gates,
+        meetsEvidenceBar: Object.values(gates).every(Boolean),
+      };
+    });
+
+    return reply.send({
+      items: items.sort((a, b) => a.symbol.localeCompare(b.symbol)),
+      note: 'meetsEvidenceBar reports whether stored evidence clears the promotion gates. It is not investment advice, and no value here authorises deploying capital.',
+      generatedAt: new Date().toISOString(),
+    });
+  });
+}

@@ -232,6 +232,10 @@ export class ApiClient {
     }
   }
 
+  getMarkets(): Promise<unknown> {
+    return this.#request(`/v1/markets`);
+  }
+
   getDashboard(): Promise<DashboardSummary> {
     return this.#request(`/v1/dashboard`);
   }

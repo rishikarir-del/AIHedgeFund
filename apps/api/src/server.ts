@@ -17,7 +17,7 @@ import { registerStrategyRoutes } from './routes/strategies.js';
 import { registerVerificationRoutes } from './routes/verification.js';
 import { registerEvidenceRoutes } from './routes/evidence.js';
 import { registerDecisionRoutes } from './routes/decisions.js';
-import { registerDashboardRoutes } from './routes/dashboard.js';
+import { registerDashboardRoutes, registerMarketRoutes } from './routes/dashboard.js';
 import { registerWalkForwardRoutes } from './routes/walk-forward.js';
 
 export interface BuildAppOptions {
@@ -76,6 +76,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   registerDecisionRoutes(app, options.db);
   registerDashboardRoutes(app, options.db, options.queueInspector);
   registerWalkForwardRoutes(app, options.db, options.queue);
+  registerMarketRoutes(app, options.db);
 
   if (options.objectStore) {
     registerVerificationRoutes(
