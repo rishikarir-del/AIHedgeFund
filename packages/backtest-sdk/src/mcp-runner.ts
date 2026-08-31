@@ -16,22 +16,21 @@
  *      without a shape check, and a missing field becomes null rather than a
  *      silent zero.
  *
- * KNOWN LIMITATION, verified against the live service on 2026-08-31 (result
- * 01M1AQ1YTH9QTQBWAT5C0VWV74): `quick_backtest` returns aggregate metrics but
- * NO per-trade array and NO equity series. It supplies an `r2Url` pointing at
- * a compressed blob, and exposes `get_trades` / `get_equity_curve` as separate
- * tools.
+ * `quick_backtest` returns aggregates only -- no trade array, no equity
+ * series. Those come from `get_trades` and `get_equity_curve`, keyed by the
+ * result id, so `run` issues all three. Without the ledger @arf/metrics has
+ * nothing to recalculate and parity has only one side, which would leave an
+ * engine run a reported result rather than verified evidence.
  *
- * `trades` and `equity` therefore come back empty from this runner today.
- * That matters more than it looks: @arf/metrics recalculates from the ledger,
- * so without trades there is nothing to recalculate and the parity comparison
- * has only one side. Until the ledger is fetched, an `mcp_engine` run is a
- * reported result, not independently verified evidence -- which is precisely
- * what ADR 0002 refuses to promote on.
+ * A ledger fetch that fails is a warning, not an error: the aggregates are
+ * still a real result, and discarding them because a follow-up call failed
+ * would be worse than recording that verification is unavailable. Nothing is
+ * ever synthesised from aggregates -- doing so would manufacture exactly the
+ * evidence this system exists to check.
  *
- * Fetching the ledger is the next step and is deliberately not stubbed here:
- * returning an empty array is honest, whereas synthesising trades from
- * aggregates would manufacture the evidence this system exists to check.
+ * Verified live on 2026-08-31 (result 01M1AQBDS2RJGPPD8RASYPDMGY): 6 trades
+ * and 858 equity points fetched, matching the engine's own reported trade
+ * count of 6.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -102,6 +101,28 @@ function parseJsonRpc(body: string): JsonRpcResponse | null {
 function str(source: Record<string, unknown>, key: string): string | null {
   const value = source[key];
   return typeof value === 'string' ? value : null;
+}
+
+/**
+ * Normalises a timestamp to ISO 8601 UTC.
+ *
+ * The equity tool returns Unix milliseconds while the backtest reply uses ISO
+ * strings, so both are accepted. CLAUDE.md 7.3 requires ISO at boundaries and
+ * forbids depending on the server's local timezone, so the conversion is
+ * explicit rather than left to Date's string coercion.
+ */
+function isoTime(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // Seconds and milliseconds are both plausible; anything below this bound
+    // cannot be a sane millisecond timestamp for market data.
+    const ms = value < 100_000_000_000 ? value * 1000 : value;
+    return new Date(ms).toISOString();
+  }
+  return null;
 }
 
 /** Money arrives as a number from JSON; render it losslessly as a string. */
@@ -178,6 +199,13 @@ export class McpBacktestRunner implements BacktestRunner {
     const payload = await this.#call(this.#config.toolName, args);
     const result = this.#extractResult(payload);
 
+    // The backtest reply carries aggregates only. The ledger and the curve
+    // live behind separate tools keyed by the result id, and the ledger is
+    // what @arf/metrics recalculates from -- without it there is nothing to
+    // verify the reported numbers against.
+    const resultId = str(result, 'id') ?? str(payload, 'resultId');
+    const ledger = resultId ? await this.#fetchLedger(resultId) : null;
+
     const durationMs = Date.now() - startedAt;
     const codeHash = createHash('sha256').update(input.pineSource, 'utf8').digest('hex');
 
@@ -199,12 +227,12 @@ export class McpBacktestRunner implements BacktestRunner {
       environmentHash: createHash('sha256').update(`${engine}:${engineVersion}`, 'utf8').digest('hex'),
       parameters: input.parameters ?? {},
       executionSettings: isRecord(payload['parityProfile']) ? payload['parityProfile'] : {},
-      trades: this.#extractTrades(result),
-      equity: this.#extractEquity(result),
+      trades: ledger?.trades ?? this.#extractTrades(result),
+      equity: ledger?.equity ?? this.#extractEquity(result),
       // Verbatim. Independent recalculation happens in @arf/metrics; this is
       // the "reported" half of the parity comparison and must not be cleaned.
       reportedMetrics: result,
-      warnings: this.#extractWarnings(payload),
+      warnings: [...this.#extractWarnings(payload), ...(ledger?.warnings ?? [])],
       durationMs,
       externalResultId: str(result, 'id') ?? str(payload, 'resultId'),
     };
@@ -353,6 +381,9 @@ export class McpBacktestRunner implements BacktestRunner {
       try {
         const parsed: unknown = JSON.parse(block['text']);
         if (isRecord(parsed)) return parsed;
+        // Some tools answer with a bare array rather than an object. Wrap it
+        // so downstream extraction sees a consistent shape.
+        if (Array.isArray(parsed)) return { rows: parsed };
       } catch {
         // Prose block, not the payload. Skip rather than fail: the service
         // interleaves human-readable text with the structured result.
@@ -363,45 +394,101 @@ export class McpBacktestRunner implements BacktestRunner {
     throw new RunnerError('malformed_response', 'No JSON payload found in the engine response.');
   }
 
+  /**
+   * Fetches the trade ledger and equity curve for a completed run.
+   *
+   * Failure here is non-fatal and reported as a warning rather than thrown:
+   * the aggregates are still a real result, and losing them because a
+   * follow-up call failed would be worse than recording that the ledger is
+   * missing. A run without a ledger simply cannot be independently verified,
+   * which the parity comparison will then report honestly.
+   */
+  async #fetchLedger(resultId: string): Promise<{
+    trades: readonly RunnerTrade[];
+    equity: readonly RunnerEquityPoint[];
+    warnings: readonly string[];
+  }> {
+    const warnings: string[] = [];
+    let trades: readonly RunnerTrade[] = [];
+    let equity: readonly RunnerEquityPoint[] = [];
+
+    try {
+      const payload = await this.#call('get_trades', { jobId: resultId });
+      trades = this.#extractTrades(this.#extractResult(payload));
+      if (trades.length === 0) warnings.push('ledger: get_trades returned no rows');
+    } catch (error) {
+      warnings.push(
+        `ledger: trades unavailable (${error instanceof Error ? redactText(error.message) : 'unknown'})`,
+      );
+    }
+
+    try {
+      const payload = await this.#call('get_equity_curve', { jobId: resultId, maxPoints: 1000 });
+      equity = this.#extractEquity(this.#extractResult(payload));
+      // The service downsamples above maxPoints. A downsampled curve is not
+      // the curve, so anything derived from it must say so.
+      if (equity.length >= 1000) {
+        warnings.push('ledger: equity curve was downsampled to 1000 points by the engine');
+      }
+    } catch (error) {
+      warnings.push(
+        `ledger: equity unavailable (${error instanceof Error ? redactText(error.message) : 'unknown'})`,
+      );
+    }
+
+    return { trades, equity, warnings };
+  }
+
   #extractResult(payload: Record<string, unknown>): Record<string, unknown> {
     const nested = payload['result'];
     return isRecord(nested) ? nested : payload;
   }
 
+  /** Finds the first array under any of the given keys. Shapes vary by tool. */
+  #arrayUnder(source: Record<string, unknown>, keys: readonly string[]): readonly unknown[] {
+    for (const key of keys) {
+      const value = source[key];
+      if (Array.isArray(value)) return value;
+    }
+    return [];
+  }
+
   #extractTrades(result: Record<string, unknown>): readonly RunnerTrade[] {
-    const raw = result['trades'];
-    if (!Array.isArray(raw)) return [];
+    const raw = this.#arrayUnder(result, ['trades', 'rows', 'items']);
+    if (raw.length === 0) return [];
 
     const trades: RunnerTrade[] = [];
     for (const [index, entry] of raw.entries()) {
       if (!isRecord(entry)) continue;
-      const entryTime = str(entry, 'entryTime');
+      const entryTime = isoTime(entry['entryTime']);
       if (!entryTime) continue;
 
       trades.push({
         sequence: typeof entry['sequence'] === 'number' ? entry['sequence'] : index + 1,
         direction: entry['direction'] === 'short' ? 'short' : 'long',
         entryTime,
-        exitTime: str(entry, 'exitTime'),
+        exitTime: isoTime(entry['exitTime']),
         entryPrice: money(entry, 'entryPrice') ?? '0',
         exitPrice: money(entry, 'exitPrice'),
         quantity: money(entry, 'quantity') ?? '0',
         // Null, never zero: an unrealised trade has no profit, which is a
         // different fact from a profit of nothing.
-        profit: money(entry, 'profit'),
+        // The tool documents this column as net P&L, commission-inclusive.
+      // Null when absent, never zero: an unrealised trade has no profit.
+      profit: money(entry, 'profit') ?? money(entry, 'netProfit') ?? money(entry, 'pnl'),
       });
     }
     return trades;
   }
 
   #extractEquity(result: Record<string, unknown>): readonly RunnerEquityPoint[] {
-    const raw = result['equity'];
-    if (!Array.isArray(raw)) return [];
+    const raw = this.#arrayUnder(result, ['equity', 'points', 'curve', 'rows', 'items']);
+    if (raw.length === 0) return [];
 
     const points: RunnerEquityPoint[] = [];
     for (const entry of raw) {
       if (!isRecord(entry)) continue;
-      const barTime = str(entry, 'barTime');
+      const barTime = isoTime(entry['barTime'] ?? entry['time'] ?? entry['t']);
       const equity = money(entry, 'equity');
       if (barTime && equity) points.push({ barTime, equity });
     }
